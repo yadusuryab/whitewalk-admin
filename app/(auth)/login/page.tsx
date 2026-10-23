@@ -3,8 +3,19 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Lock } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Inter_Tight } from 'next/font/google'
+import { ArrowUpRight, Loader2 } from 'lucide-react'
+
+const display = Inter_Tight({
+  subsets: ['latin'],
+  weight: ['500', '600', '800'],
+  display: 'swap',
+})
+
+const inputClass =
+  'mt-2 h-12 w-full rounded-2xl bg-neutral-100 px-4 text-sm font-medium outline-none transition-all duration-300 placeholder:text-neutral-400 focus:bg-white focus:ring-2 focus:ring-neutral-950'
+
+const labelClass = 'text-sm font-semibold text-neutral-500'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -20,13 +31,12 @@ export default function LoginPage() {
       try {
         const response = await fetch('/api/auth/verify', {
           method: 'GET',
-          credentials: 'include', // Important for sending cookies
+          credentials: 'include',
         })
-        
+
         const data = await response.json()
-        
+
         if (data.authenticated) {
-          // User is already authenticated, redirect to admin
           router.push('/admin')
         }
       } catch (err) {
@@ -48,7 +58,7 @@ export default function LoginPage() {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // Important for receiving cookies
+        credentials: 'include',
         body: JSON.stringify({ email, password }),
       })
 
@@ -56,7 +66,7 @@ export default function LoginPage() {
 
       if (response.ok) {
         router.push('/admin')
-        router.refresh() // Refresh to update any server components
+        router.refresh()
       } else {
         setError(data.error || 'Login failed')
       }
@@ -67,85 +77,107 @@ export default function LoginPage() {
     }
   }
 
-  // Show loading while checking authentication
   if (checkingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Checking authentication...</p>
+      <div
+        className={`${display.className} flex min-h-screen items-center justify-center bg-white`}
+      >
+        <div className="h-1 w-40 overflow-hidden rounded-full bg-neutral-100">
+          <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-600" />
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center ">
-      <div className="max-w-md w-full">
-        <div className="bg-white rounded-2xl  p-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-4">
-              <Lock className="h-8 w-8 text-secondary" />
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight text-secondary">Footex Admin</h1>
-            <p className="text-muted-foreground font-semibold mt-2">Sign in to manage your store</p>
+    <div
+      className={`${display.className} flex min-h-screen items-center justify-center bg-white px-5 py-10 text-neutral-950 sm:px-8`}
+    >
+      <div className="w-full max-w-md duration-700 animate-in fade-in slide-in-from-bottom-6">
+        {/* Header */}
+        <div className="inline-flex items-center gap-2 rounded-md bg-blue-600/10 px-3.5 py-1.5 text-sm font-semibold text-blue-700">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-blue-600 opacity-60 motion-safe:animate-ping" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-600" />
+          </span>
+          Admin access
+        </div>
+
+        <h1 className="mt-4 text-balance text-6xl font-extrabold leading-[0.9] tracking-[-0.045em] sm:text-7xl">
+          WhiteWalk
+          <br />
+          Admin.
+        </h1>
+        <p className="mt-4 text-base font-medium text-neutral-500">
+          Sign in to manage your store.
+        </p>
+
+        {error && (
+          <div
+            role="alert"
+            className="mt-6 rounded-3xl bg-red-50 p-4 text-sm font-semibold text-red-700 duration-300 animate-in fade-in slide-in-from-top-2"
+          >
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <div>
+            <label htmlFor="email" className={labelClass}>
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              placeholder="Enter your email"
+              onChange={(e) => setEmail(e.target.value)}
+              className={inputClass}
+              required
+            />
           </div>
 
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-700 text-sm">{error}</p>
-            </div>
-          )}
+          <div>
+            <label htmlFor="password" className={labelClass}>
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              placeholder="Enter your password"
+              onChange={(e) => setPassword(e.target.value)}
+              className={inputClass}
+              required
+            />
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                placeholder='Enter your email'
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                placeholder='Enter your password'
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div className="pt-4">
-              <Button
-                type="submit"
-                disabled={loading}
-                size={'lg'}
-                className="w-full py-3 px-4  font-medium rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="group flex h-14 w-full items-center justify-between rounded-full bg-neutral-950 pl-6 pr-1.5 text-white transition-all duration-300 hover:bg-blue-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-neutral-950"
+            >
+              <span className="text-lg font-extrabold tracking-[-0.03em]">
+                {loading ? 'Signing in…' : 'Sign in'}
+              </span>
+              <span
+                aria-hidden="true"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-neutral-950 transition-transform duration-300 group-enabled:group-hover:rotate-45"
               >
                 {loading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    Signing in...
-                  </>
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
-                  'Sign In'
+                  <ArrowUpRight className="h-5 w-5" />
                 )}
-              </Button>
-            </div>
-            <p className='text-muted-foreground font-semibold text-sm tracking-tight'>*Contact Developer for Email & Password</p>
-          </form>
-        </div>
+              </span>
+            </button>
+          </div>
+
+          <p className="text-center text-xs font-semibold text-neutral-400">
+            Contact developer for email &amp; password
+          </p>
+        </form>
       </div>
     </div>
   )

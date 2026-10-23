@@ -136,7 +136,7 @@ export default function ProductsPage() {
         return null;
       }
     },
-    [mobileView]
+    [mobileView],
   );
 
   // Filter and paginate products
@@ -177,7 +177,7 @@ export default function ProductsPage() {
     async (id: string, currentStatus: boolean) => {
       if (
         !confirm(
-          `Are you sure you want to ${currentStatus ? "enable" : "disable"} this product?`
+          `Are you sure you want to ${currentStatus ? "enable" : "disable"} this product?`,
         )
       )
         return;
@@ -190,15 +190,15 @@ export default function ProductsPage() {
 
         setShoes((prev) =>
           prev.map((shoe) =>
-            shoe._id === id ? { ...shoe, isDisabled: !currentStatus } : shoe
-          )
+            shoe._id === id ? { ...shoe, isDisabled: !currentStatus } : shoe,
+          ),
         );
       } catch (error) {
         console.error("Error updating product:", error);
         alert("Failed to update product status");
       }
     },
-    []
+    [],
   );
 
   // Delete product
@@ -243,8 +243,8 @@ export default function ProductsPage() {
                 productName: editForm.productName,
                 price: editForm.price,
               }
-            : shoe
-        )
+            : shoe,
+        ),
       );
 
       setEditingProduct(null);
@@ -285,7 +285,7 @@ export default function ProductsPage() {
             )} */}
           <div>
             <h1 className="text-4xl  text-secondary font-bold tracking-tighter">
-              Footex
+              whitewalk
             </h1>
             <p className="text-xs md:text-sm text-gray-50 bg-secondary px-2 p-1 rounded tracking-tight font-semibold">
               Manage Products
@@ -315,8 +315,6 @@ export default function ProductsPage() {
         )}
       </div>
       <div className=" ">
-      
-
         {/* Mobile Menu */}
 
         {/* Search and Filters - Responsive */}
@@ -358,145 +356,149 @@ export default function ProductsPage() {
 
         {/* Edit Modal */}
         {editingProduct && (
-  <div className="fixed inset-0 bg-black/80 backdrop-blur-2xl flex items-center justify-center z-50 p-2 md:p-4">
-    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-2">
-      <div className="p-4 md:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold tracking-tight">Edit Product</h3>
-          <Button
-            onClick={() => setEditingProduct(null)}
-            variant={'ghost'}
-            size='icon'
-          >
-           <X/>
-          </Button>
-        </div>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-2xl flex items-center justify-center z-50 p-2 md:p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-2">
+              <div className="p-4 md:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold tracking-tight">
+                    Edit Product
+                  </h3>
+                  <Button
+                    onClick={() => setEditingProduct(null)}
+                    variant={"ghost"}
+                    size="icon"
+                  >
+                    <X />
+                  </Button>
+                </div>
 
-        {/* Product Image */}
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-muted-foreground mb-2">
-            Product Image
-          </label>
-          <div className="flex items-center gap-4">
-            {editingProduct.images ? (
-              <div className="relative h-24 w-24 rounded-xl overflow-hidden border">
-                <Image
-                  src={getOptimizedImageUrl(editingProduct.images) || ''}
-                  alt={editingProduct.productName}
-                  fill
-                  sizes="96px"
-                  className="object-cover"
-                  quality={80}
-                />
+                {/* Product Image */}
+                <div className="mb-6">
+                  <label className="block text-sm font-semibold text-muted-foreground mb-2">
+                    Product Image
+                  </label>
+                  <div className="flex items-center gap-4">
+                    {editingProduct.images ? (
+                      <div className="relative h-24 w-24 rounded-xl overflow-hidden border">
+                        <Image
+                          src={
+                            getOptimizedImageUrl(editingProduct.images) || ""
+                          }
+                          alt={editingProduct.productName}
+                          fill
+                          sizes="96px"
+                          className="object-cover"
+                          quality={80}
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-24 w-24 rounded-xl bg-gray-100 border flex items-center justify-center">
+                        <ImageIcon className="h-8 w-8 text-gray-400" />
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm text-gray-600">
+                        Current product image
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        To change image, delete and re-add product
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-muted-foreground mb-1">
+                      Product Name
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.productName}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          productName: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter product name"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-muted-foreground mb-1">
+                        Order Number
+                      </label>
+                      <input
+                        type="number"
+                        value={editingProduct.orderNumber}
+                        readOnly
+                        className="w-full px-3 py-2 text-sm rounded-xl border bg-gray-50 text-gray-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-muted-foreground mb-1">
+                        Price (₹)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editForm.price}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            price: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <div>
+                      <p className="text-sm font-medium">Status</p>
+                      <p className="text-xs text-gray-500">
+                        {editingProduct.isDisabled ? "Disabled" : "Active"}
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() =>
+                        toggleProductStatus(
+                          editingProduct._id,
+                          editingProduct.isDisabled,
+                        )
+                      }
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                        editingProduct.isDisabled
+                          ? "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                          : "bg-green-100 text-green-800 hover:bg-green-200"
+                      }`}
+                    >
+                      {editingProduct.isDisabled ? "Enable" : "Disable"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 md:gap-3 mt-6 pt-4 border-t">
+                  <Button
+                    onClick={() => setEditingProduct(null)}
+                    variant={"outline"}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={saveEdit} variant={"secondary"}>
+                    Save Changes
+                  </Button>
+                </div>
               </div>
-            ) : (
-              <div className="h-24 w-24 rounded-xl bg-gray-100 border flex items-center justify-center">
-                <ImageIcon className="h-8 w-8 text-gray-400" />
-              </div>
-            )}
-            <div>
-              <p className="text-sm text-gray-600">
-                Current product image
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                To change image, delete and re-add product
-              </p>
             </div>
           </div>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-muted-foreground mb-1">
-              Product Name
-            </label>
-            <input
-              type="text"
-              value={editForm.productName}
-              onChange={(e) =>
-                setEditForm({
-                  ...editForm,
-                  productName: e.target.value,
-                })
-              }
-              className="w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter product name"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-muted-foreground mb-1">
-                Order Number
-              </label>
-              <input
-                type="number"
-                value={editingProduct.orderNumber}
-                readOnly
-                className="w-full px-3 py-2 text-sm rounded-xl border bg-gray-50 text-gray-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-muted-foreground mb-1">
-                Price (₹)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={editForm.price}
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    price: parseFloat(e.target.value) || 0,
-                  })
-                }
-                className="w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-        
-
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-            <div>
-              <p className="text-sm font-medium">Status</p>
-              <p className="text-xs text-gray-500">
-                {editingProduct.isDisabled ? 'Disabled' : 'Active'}
-              </p>
-            </div>
-            <Button
-              onClick={() => toggleProductStatus(editingProduct._id, editingProduct.isDisabled)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
-                editingProduct.isDisabled
-                  ? 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                  : 'bg-green-100 text-green-800 hover:bg-green-200'
-              }`}
-            >
-              {editingProduct.isDisabled ? 'Enable' : 'Disable'}
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 md:gap-3 mt-6 pt-4 border-t">
-          <Button
-            onClick={() => setEditingProduct(null)}
-            variant={'outline'}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={saveEdit}
-            variant={'secondary'}
-          >
-            Save Changes
-          </Button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+        )}
 
         {/* Products Table - Responsive */}
         <div className="bg-white overflow-hidden">
@@ -536,7 +538,7 @@ export default function ProductsPage() {
                               #{shoe.orderNumber} - {shoe.productName}
                             </div>
                             <div className="text-md tracking-tight text-muted-foreground font-semibold">
-                            ₹{shoe.price}
+                              ₹{shoe.price}
                             </div>
                           </div>
                         </div>
@@ -569,8 +571,7 @@ export default function ProductsPage() {
                             <Button
                               onClick={() => startEdit(shoe)}
                               className="text-blue-600 hover:text-blue-800 p-1"
-                            
-                              variant={'outline'}
+                              variant={"outline"}
                               title="Edit"
                             >
                               <Edit className="h-4 w-4" />
@@ -579,8 +580,8 @@ export default function ProductsPage() {
                             <Button
                               onClick={() => deleteProduct(shoe._id)}
                               className="text-red-600 hover:text-red-800 p-1"
-                              size={'icon'}
-                              variant={'outline'}
+                              size={"icon"}
+                              variant={"outline"}
                               title="Delete"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -663,7 +664,7 @@ export default function ProductsPage() {
                         </td>
 
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        ₹{shoe.price}
+                          ₹{shoe.price}
                         </td>
 
                         <td className="px-4 py-3 whitespace-nowrap">
@@ -696,8 +697,8 @@ export default function ProductsPage() {
                             <Button
                               onClick={() => startEdit(shoe)}
                               className="text-blue-600 hover:text-blue-800 p-1"
-                              title="Edit" 
-                              variant={'outline'}
+                              title="Edit"
+                              variant={"outline"}
                             >
                               <Edit className="h-4 w-4" />
                               Edit
@@ -706,8 +707,8 @@ export default function ProductsPage() {
                               onClick={() => deleteProduct(shoe._id)}
                               className="text-red-600 hover:text-red-800 p-1"
                               title="Delete"
-                              size={'icon'}
-                              variant={'outline'}
+                              size={"icon"}
+                              variant={"outline"}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -723,12 +724,11 @@ export default function ProductsPage() {
 
           {filteredProducts.length === 0 && (
             <div className="text-center py-12">
-              <div className="text-muted-foreground mb-2 font-semibold">No products found</div>
+              <div className="text-muted-foreground mb-2 font-semibold">
+                No products found
+              </div>
               {search && (
-                <Button
-                  onClick={() => setSearch("")}
-                  variant={"outline"}
-                >
+                <Button onClick={() => setSearch("")} variant={"outline"}>
                   Clear search
                 </Button>
               )}
@@ -747,8 +747,8 @@ export default function ProductsPage() {
               <Button
                 onClick={() => goToPage(currentPage - 1)}
                 disabled={currentPage === 1}
-                variant={'outline'}
-                size={'icon'}
+                variant={"outline"}
+                size={"icon"}
                 className="p-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 "
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -775,8 +775,8 @@ export default function ProductsPage() {
                         ? "bg-blue-600 text-white"
                         : "hover:bg-gray-100"
                     }`}
-                    variant={'ghost'}
-                    size={'icon'}
+                    variant={"ghost"}
+                    size={"icon"}
                   >
                     {pageNum}
                   </Button>
@@ -787,9 +787,8 @@ export default function ProductsPage() {
                 onClick={() => goToPage(currentPage + 1)}
                 disabled={currentPage === totalPages}
                 className="p-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 "
-                variant={'outline'}
-                size={'icon'}
-
+                variant={"outline"}
+                size={"icon"}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>

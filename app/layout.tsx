@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Footex Admin",
+  title: "whitewalk Admin",
   description: "Manage Products",
 };
 

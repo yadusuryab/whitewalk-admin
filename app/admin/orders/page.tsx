@@ -2,14 +2,8 @@
 // app/admin/orders/page.tsx
 "use client";
 
-import {
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-  useRef,
-  ReactNode,
-} from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { Inter_Tight } from "next/font/google";
 import {
   Search,
   X,
@@ -31,7 +25,12 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { client as sanityClient } from "@/lib/sanity";
-import { Button } from "@/components/ui/button";
+
+const display = Inter_Tight({
+  subsets: ["latin"],
+  weight: ["500", "600", "800"],
+  display: "swap",
+});
 
 /* ---------- types & constants ---------- */
 
@@ -115,21 +114,21 @@ const QUERY = `*[_type == "order"] | order(createdAt desc) {
 }`;
 
 const STATUS: Record<Fulfillment, { style: string; Icon: any }> = {
-  pending: { style: "bg-gray-100 text-gray-800", Icon: Clock },
-  processing: { style: "bg-amber-100 text-amber-800", Icon: Package },
-  shipped: { style: "bg-blue-100 text-blue-800", Icon: Truck },
-  delivered: { style: "bg-green-100 text-green-800", Icon: CheckCircle2 },
-  cancelled: { style: "bg-red-100 text-red-800", Icon: XCircle },
+  pending: { style: "bg-neutral-100 text-neutral-600", Icon: Clock },
+  processing: { style: "bg-amber-50 text-amber-700", Icon: Package },
+  shipped: { style: "bg-blue-600/10 text-blue-700", Icon: Truck },
+  delivered: { style: "bg-green-50 text-green-700", Icon: CheckCircle2 },
+  cancelled: { style: "bg-red-50 text-red-600", Icon: XCircle },
 };
 const STATUSES = Object.keys(STATUS) as Fulfillment[];
 
 const PAY_STYLE: Record<PaymentStatus, string> = {
-  verifying: "bg-blue-100 text-blue-800",
-  paid: "bg-green-100 text-green-800",
-  pending: "bg-amber-100 text-amber-800",
-  rejected: "bg-red-100 text-red-800",
-  failed: "bg-red-100 text-red-800",
-  refunded: "bg-gray-100 text-gray-800",
+  verifying: "bg-blue-600/10 text-blue-700",
+  paid: "bg-green-50 text-green-700",
+  pending: "bg-amber-50 text-amber-700",
+  rejected: "bg-red-50 text-red-600",
+  failed: "bg-red-50 text-red-600",
+  refunded: "bg-neutral-100 text-neutral-600",
 };
 const PAY_LABEL: Record<PaymentStatus, string> = {
   verifying: "Awaiting verification",
@@ -176,7 +175,7 @@ const waLink = (o: Order) => {
       // The schema has no slug field, so this uses the product id.
       // Change this URL to match your storefront's product route.
       const url = it.productId
-        ? `\n   🔗 https://footex.in/product/${it.productId}`
+        ? `\n   🔗 https://whitewalk.in/product/${it.productId}`
         : "";
       return `${i + 1}. ${it.productName} (Size ${it.size}) - ${price}${url}`;
     })
@@ -190,9 +189,136 @@ Are you still planning to order?
 Reply here, we'll confirm it right away.
 Stock is limited!
 
-🎁 More offers: https://footex.in/offer`;
+🎁 More offers: https://whitewalk.in/offer`;
   return `https://wa.me/91${normPhone(o.contact1)}?text=${encodeURIComponent(msg)}`;
 };
+
+/* ---------- UI atoms ---------- */
+
+const inputCls =
+  "w-full rounded-2xl bg-neutral-100 px-4 py-3 text-sm font-medium outline-none transition-all duration-300 placeholder:text-neutral-400 focus:bg-white focus:ring-2 focus:ring-neutral-950";
+const inputLg = `${inputCls} h-12 py-0`;
+const labelCls = "mb-2 block text-sm font-semibold text-neutral-500";
+const selectCls =
+  "h-9 cursor-pointer rounded-full bg-neutral-100 px-3 text-xs font-semibold outline-none transition-all focus:ring-2 focus:ring-neutral-950";
+const thCls =
+  "px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.25em] text-neutral-400";
+const checkCls =
+  "h-4 w-4 cursor-pointer rounded accent-neutral-950";
+
+type BtnProps = {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  variant?: "primary" | "soft" | "danger";
+  icon?: boolean;
+  className?: string;
+  title?: string;
+  type?: "button" | "submit";
+};
+
+const Btn = ({
+  children,
+  onClick,
+  disabled,
+  variant = "soft",
+  icon,
+  className = "",
+  title,
+  type = "button",
+}: BtnProps) => {
+  const v = {
+    primary: "bg-neutral-950 text-white hover:bg-blue-600",
+    soft: "bg-neutral-100 text-neutral-950 hover:bg-neutral-200",
+    danger: "bg-red-50 text-red-600 hover:bg-red-100",
+  }[variant];
+  return (
+    <button
+      type={type}
+      title={title}
+      aria-label={icon ? title : undefined}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full text-sm font-extrabold tracking-tight transition-all duration-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 ${
+        icon ? "w-10" : "px-5"
+      } ${v} ${className}`}
+    >
+      {children}
+    </button>
+  );
+};
+
+const Chip = ({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`flex h-9 items-center gap-1.5 rounded-full px-4 text-xs font-extrabold tracking-tight transition-all duration-200 active:scale-90 ${
+      active
+        ? "bg-neutral-950 text-white"
+        : "bg-neutral-100 hover:bg-neutral-200"
+    }`}
+  >
+    {children}
+  </button>
+);
+
+const Tag = ({
+  children,
+  className = "bg-neutral-100 text-neutral-600",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <span
+    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${className}`}
+  >
+    {children}
+  </span>
+);
+
+const StatusBadge = ({ status }: { status: Fulfillment }) => {
+  const { style, Icon } = STATUS[status] ?? STATUS.pending;
+  return (
+    <span
+      className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-extrabold tracking-tight ${style}`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {cap(status)}
+    </span>
+  );
+};
+
+const PayBadge = ({ status }: { status: PaymentStatus }) => (
+  <span
+    className={`inline-flex h-8 items-center whitespace-nowrap rounded-full px-3 text-xs font-extrabold tracking-tight ${
+      PAY_STYLE[status] ?? "bg-neutral-100 text-neutral-600"
+    }`}
+  >
+    {PAY_LABEL[status] ?? status}
+  </span>
+);
+
+const MethodTag = ({ method }: { method: Order["shippingMethod"] }) =>
+  method === "cod" ? (
+    <Tag className="bg-amber-50 text-amber-700">COD</Tag>
+  ) : (
+    <Tag className="bg-blue-600/10 text-blue-700">Prepaid</Tag>
+  );
+
+const Addons = ({ order }: { order: Order }) => (
+  <>
+    {order.shoeCleanerAddon && <Tag>Cleaner</Tag>}
+    {order.freeSocksOffer && <Tag>Free socks</Tag>}
+  </>
+);
 
 const WaButton = ({ order }: { order: Order }) => (
   <a
@@ -201,20 +327,38 @@ const WaButton = ({ order }: { order: Order }) => (
     rel="noreferrer"
     onClick={(e) => e.stopPropagation()}
     title="Message on WhatsApp"
-    className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-800 px-2 py-1 text-xs font-semibold hover:bg-green-200"
+    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-green-50 px-3 text-xs font-extrabold tracking-tight text-green-700 transition-all duration-300 hover:bg-green-100 active:scale-95"
   >
-    <MessageCircle className="h-3 w-3" /> WhatsApp
+    <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
   </a>
 );
 
-const INPUT =
-  "w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent";
-const LABEL = "block text-sm font-semibold text-muted-foreground mb-1";
-const SELECT =
-  "text-xs md:text-sm rounded-full bg-muted font-semibold px-2 py-1";
-const TH =
-  "px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider";
-const CHECK = "h-4 w-4 rounded border-gray-300 cursor-pointer accent-blue-600";
+function Thumb({
+  url,
+  alt,
+  size = "h-12 w-12",
+}: {
+  url?: string | null;
+  alt?: string;
+  size?: string;
+}) {
+  const [broken, setBroken] = useState(false);
+  return url && !broken ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={alt}
+      onError={() => setBroken(true)}
+      className={`${size} shrink-0 rounded-2xl bg-white object-cover`}
+    />
+  ) : (
+    <div
+      className={`${size} flex shrink-0 items-center justify-center rounded-2xl bg-white`}
+    >
+      <ImageIcon className="h-5 w-5 text-neutral-300" />
+    </div>
+  );
+}
 
 type DatePreset =
   | "all"
@@ -272,75 +416,6 @@ function getRange(preset: DatePreset, from: string, to: string) {
   }
 }
 
-/* ---------- small components ---------- */
-
-const Chip = ({
-  className,
-  children,
-}: {
-  className: string;
-  children: ReactNode;
-}) => (
-  <span
-    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${className}`}
-  >
-    {children}
-  </span>
-);
-
-const StatusBadge = ({ status }: { status: Fulfillment }) => {
-  const { style, Icon } = STATUS[status] ?? STATUS.pending;
-  return (
-    <Chip className={style}>
-      <Icon className="h-3 w-3" />
-      {cap(status)}
-    </Chip>
-  );
-};
-
-const PayBadge = ({ status }: { status: PaymentStatus }) => (
-  <Chip className={PAY_STYLE[status] ?? "bg-gray-100 text-gray-800"}>
-    {PAY_LABEL[status] ?? status}
-  </Chip>
-);
-
-const Addons = ({ order }: { order: Order }) => (
-  <>
-    {order.shoeCleanerAddon && (
-      <Chip className="bg-purple-100 text-purple-800">Cleaner</Chip>
-    )}
-    {order.freeSocksOffer && (
-      <Chip className="bg-pink-100 text-pink-800">Free Socks</Chip>
-    )}
-  </>
-);
-
-function Thumb({
-  url,
-  alt,
-  size = "h-10 w-10",
-}: {
-  url?: string | null;
-  alt?: string;
-  size?: string;
-}) {
-  const [broken, setBroken] = useState(false);
-  return url && !broken ? (
-    <img
-      src={url}
-      alt={alt}
-      onError={() => setBroken(true)}
-      className={`${size} rounded-lg object-cover border bg-gray-100 shrink-0`}
-    />
-  ) : (
-    <div
-      className={`${size} rounded-lg bg-gray-100 shrink-0 flex items-center justify-center`}
-    >
-      <ImageIcon className="h-4 w-4 text-gray-400" />
-    </div>
-  );
-}
-
 /* ---------- order list (table on desktop, cards on mobile) ---------- */
 
 function OrderList({
@@ -369,12 +444,12 @@ function OrderList({
 
   return (
     <>
-      <div className="md:hidden divide-y divide-muted">
+      <div className="space-y-3 md:hidden">
         {selectable && orders.length > 0 && (
-          <label className="flex items-center gap-3 px-3 py-2 text-xs font-semibold text-muted-foreground">
+          <label className="flex items-center gap-3 px-2 text-xs font-semibold text-neutral-500">
             <input
               type="checkbox"
-              className={CHECK}
+              className={checkCls}
               checked={allOnPage}
               ref={(el) => {
                 if (el) el.indeterminate = !allOnPage && someOnPage;
@@ -384,16 +459,22 @@ function OrderList({
             Select page
           </label>
         )}
-        {orders.map((o) => (
+        {orders.map((o, i) => (
           <div
             key={o._id}
-            className={`flex items-start ${selected.has(o._id) ? "bg-blue-50" : ""}`}
+            style={{
+              animationDelay: `${(i % 10) * 45}ms`,
+              animationFillMode: "both",
+            }}
+            className={`flex items-start rounded-[1.75rem] duration-500 animate-in fade-in slide-in-from-bottom-3 ${
+              selected.has(o._id) ? "bg-blue-600/10" : "bg-neutral-100"
+            }`}
           >
             {selectable && (
-              <label className="pl-3 pt-4 pr-1 cursor-pointer">
+              <label className="cursor-pointer pb-3 pl-4 pr-1 pt-5">
                 <input
                   type="checkbox"
-                  className={CHECK}
+                  className={checkCls}
                   checked={selected.has(o._id)}
                   onChange={() => onToggle(o._id)}
                 />
@@ -401,59 +482,58 @@ function OrderList({
             )}
             <button
               onClick={() => onOpen(o._id)}
-              className="flex-1 min-w-0 text-left p-3 hover:bg-gray-50"
+              className="min-w-0 flex-1 p-3 text-left"
             >
               <div className="flex items-start gap-3">
-                <Thumb url={first(o)?.imageUrl} alt={first(o)?.productName} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm truncate">
-                    {o.customerName} • ₹{o.totalAmount}
-                  </div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {o.orderId} • {o.items?.length || 0} item(s) •{" "}
-                    {fmtDate(o.createdAt)}
-                  </div>
-                  <div className="flex gap-1 flex-wrap mt-1">
-                    <Chip
-                      className={
-                        o.shippingMethod === "cod"
-                          ? "bg-orange-100 text-orange-800"
-                          : "bg-sky-100 text-sky-800"
-                      }
-                    >
-                      {o.shippingMethod === "cod" ? "COD" : "Prepaid"}
-                    </Chip>
-                    {o.paymentStatus !== "paid" && !isAbandoned(o) && (
-                      <PayBadge status={o.paymentStatus} />
-                    )}
+                <Thumb
+                  url={first(o)?.imageUrl}
+                  alt={first(o)?.productName}
+                  size="h-20 w-20"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-neutral-400">
+                    {o.orderId}
+                  </p>
+                  <p className="truncate text-base font-extrabold leading-tight tracking-tight">
+                    {o.customerName}
+                  </p>
+                  <p className="text-2xl font-extrabold leading-none tracking-[-0.04em]">
+                    ₹{o.totalAmount}
+                  </p>
+                  <p className="mt-1 text-[11px] font-semibold text-neutral-400">
+                    {o.items?.length || 0} item(s) · {fmtDate(o.createdAt)}
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    <MethodTag method={o.shippingMethod} />
                     <Addons order={o} />
                   </div>
                 </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 {isAbandoned(o) ? (
                   <PayBadge status={o.paymentStatus} />
                 ) : (
                   <StatusBadge status={o.fulfillmentStatus} />
                 )}
+                {o.paymentStatus !== "paid" && !isAbandoned(o) && (
+                  <PayBadge status={o.paymentStatus} />
+                )}
+                {isAbandoned(o) && <WaButton order={o} />}
               </div>
             </button>
-            {isAbandoned(o) && (
-              <div className="pr-3 pt-3">
-                <WaButton order={o} />
-              </div>
-            )}
           </div>
         ))}
       </div>
 
-      <div className="hidden md:block overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="hidden overflow-x-auto rounded-[1.75rem] bg-neutral-100 p-2 md:block">
+        <table className="min-w-full">
+          <thead>
             <tr>
               {selectable && (
-                <th className="pl-4 py-2 w-8">
+                <th className="w-8 py-3 pl-4">
                   <input
                     type="checkbox"
-                    className={CHECK}
+                    className={checkCls}
                     checked={allOnPage}
                     ref={(el) => {
                       if (el) el.indeterminate = !allOnPage && someOnPage;
@@ -475,27 +555,33 @@ function OrderList({
                 "Date",
                 "",
               ].map((h, i) => (
-                <th key={i} className={TH}>
+                <th key={i} className={thCls}>
                   {h}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
-            {orders.map((o) => (
+          <tbody>
+            {orders.map((o, i) => (
               <tr
                 key={o._id}
                 onClick={() => onOpen(o._id)}
-                className={`cursor-pointer hover:bg-gray-50 text-sm ${selected.has(o._id) ? "bg-blue-50" : ""}`}
+                style={{
+                  animationDelay: `${(i % 10) * 35}ms`,
+                  animationFillMode: "both",
+                }}
+                className={`group cursor-pointer border-t border-neutral-200 transition-colors duration-500 animate-in fade-in slide-in-from-bottom-2 hover:bg-white ${
+                  selected.has(o._id) ? "bg-blue-600/10" : ""
+                }`}
               >
                 {selectable && (
                   <td
-                    className="pl-4 py-3 w-8"
+                    className="w-8 py-3 pl-4"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <input
                       type="checkbox"
-                      className={CHECK}
+                      className={checkCls}
                       checked={selected.has(o._id)}
                       onChange={() => onToggle(o._id)}
                       aria-label={`Select ${o.orderId}`}
@@ -505,28 +591,20 @@ function OrderList({
                 <td className="px-4 py-3">
                   <Thumb url={first(o)?.imageUrl} alt={first(o)?.productName} />
                 </td>
-                <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
+                <td className="whitespace-nowrap px-4 py-3 text-sm font-extrabold tracking-tight">
                   {o.orderId}
                 </td>
-                <td className="px-4 py-3 max-w-[180px] truncate">
+                <td className="max-w-[180px] truncate px-4 py-3 text-sm font-extrabold tracking-tight">
                   {o.customerName}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td className="whitespace-nowrap px-4 py-3 text-lg font-extrabold tracking-tight">
                   ₹{o.totalAmount}
                 </td>
                 <td className="px-4 py-3">
-                  <Chip
-                    className={
-                      o.shippingMethod === "cod"
-                        ? "bg-orange-100 text-orange-800"
-                        : "bg-sky-100 text-sky-800"
-                    }
-                  >
-                    {o.shippingMethod === "cod" ? "COD" : "Prepaid"}
-                  </Chip>
+                  <MethodTag method={o.shippingMethod} />
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex gap-1 flex-wrap">
+                  <div className="flex flex-wrap gap-1">
                     <Addons order={o} />
                   </div>
                 </td>
@@ -536,7 +614,7 @@ function OrderList({
                 <td className="px-4 py-3">
                   <StatusBadge status={o.fulfillmentStatus} />
                 </td>
-                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-neutral-500">
                   {fmtDate(o.createdAt)}
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -544,8 +622,9 @@ function OrderList({
                     {isAbandoned(o) && <WaButton order={o} />}
                     <button
                       onClick={(e) => del(e, o._id)}
-                      className="text-red-500 hover:text-red-700"
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-600 transition-all duration-300 hover:bg-red-100 active:scale-95"
                       title="Delete order"
+                      aria-label="Delete order"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -679,344 +758,343 @@ SHOE CLEANER : ${order.shoeCleanerAddon ? "YES" : "NO"}
         ? "Razorpay"
         : "—";
 
+  const row = (label: string, value: React.ReactNode) => (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-neutral-500">{label}</span>
+      <span className="font-extrabold tracking-tight">{value}</span>
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-2xl flex items-end sm:items-center justify-center z-50 sm:p-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-lg max-h-[95vh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-bold tracking-tight">
-              Order {order.orderId}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              {fmtDateTime(order.createdAt)}
-            </p>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              onClick={() => setConfirm(true)}
-              variant="ghost"
-              size="icon"
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              title="Delete order"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-            <Button onClick={onClose} variant="ghost" size="icon">
-              <X />
-            </Button>
-          </div>
-        </div>
-
-        {confirm && (
-          <div className="mb-4 p-3 rounded-xl border border-red-200 bg-red-50 text-sm">
-            <p className="font-semibold text-red-800 mb-2">
-              Delete order {order.orderId}? This cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button
-                onClick={() => setConfirm(false)}
-                variant="outline"
-                size="sm"
-                disabled={!!busy}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/70 p-3 backdrop-blur-md duration-300 animate-in fade-in md:p-4">
+      <div
+        className={`${display.className} max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-[1.75rem] bg-white text-neutral-950 duration-300 animate-in zoom-in-95 slide-in-from-bottom-4`}
+      >
+        <div className="p-5 md:p-6">
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-4xl font-extrabold leading-[0.92] tracking-[-0.045em]">
+                Order
+                <br />
+                <span className="break-all">{order.orderId}.</span>
+              </h3>
+              <p className="mt-2 text-xs font-semibold text-neutral-500">
+                {fmtDateTime(order.createdAt)}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Btn
+                onClick={() => setConfirm(true)}
+                icon
+                variant="danger"
+                title="Delete order"
               >
-                Cancel
-              </Button>
-              <Button
-                onClick={() =>
-                  run("delete", () => sanityClient.delete(order._id))
-                }
-                variant="destructive"
-                size="sm"
-                disabled={!!busy}
-                className="gap-2"
-              >
-                {busy === "delete" ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Deleting...
-                  </>
-                ) : (
-                  "Delete"
-                )}
-              </Button>
+                <Trash2 className="h-4 w-4" />
+              </Btn>
+              <Btn onClick={onClose} icon title="Close">
+                <X className="h-4 w-4" />
+              </Btn>
             </div>
           </div>
-        )}
 
-        <div className="mb-4 space-y-2">
-          {order.items?.map((it, i) => (
-            <div key={i} className="flex items-center gap-3 text-sm">
-              <div className="relative group/img">
-                <Thumb
-                  url={it.imageUrl}
-                  alt={it.productName}
-                  size="h-12 w-12"
-                />
-                {it.imageUrl && (
-                  <button
-                    onClick={() => copyImage(it.imageUrl!, i)}
-                    title="Copy image"
-                    className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-white border shadow flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
-                  >
-                    {copied === i ? (
-                      <Check className="h-3 w-3 text-green-600" />
-                    ) : (
-                      <ImageIcon className="h-3 w-3 text-muted-foreground" />
-                    )}
-                  </button>
-                )}
-              </div>
-              <div className="flex-1 flex justify-between items-center gap-2">
-                <span>
-                  {it.productName} (Size {it.size}){" "}
-                  {it.isFreeItem && (
-                    <span className="text-green-600 font-medium">FREE</span>
+          {confirm && (
+            <div className="mb-5 rounded-3xl bg-red-50 p-4 text-sm duration-300 animate-in fade-in slide-in-from-top-1">
+              <p className="mb-3 font-extrabold tracking-tight text-red-600">
+                Delete order {order.orderId}? This cannot be undone.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Btn
+                  onClick={() => setConfirm(false)}
+                  disabled={!!busy}
+                  className="!bg-white"
+                >
+                  Cancel
+                </Btn>
+                <Btn
+                  onClick={() =>
+                    run("delete", () => sanityClient.delete(order._id))
+                  }
+                  disabled={!!busy}
+                  variant="primary"
+                  className="!bg-red-600 hover:!bg-red-700"
+                >
+                  {busy === "delete" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deleting…
+                    </>
+                  ) : (
+                    "Delete"
                   )}
-                </span>
-                <span className="whitespace-nowrap">
-                  ₹{it.isFreeItem ? 0 : it.price}
-                </span>
+                </Btn>
               </div>
             </div>
-          ))}
-          <div className="flex justify-between text-sm font-semibold pt-1 border-t">
-            <span>Total</span>
-            <span>₹{order.totalAmount}</span>
-          </div>
-        </div>
-
-        <div className="mb-4 p-3 bg-gray-50 rounded-xl text-sm space-y-1 relative">
-          <Button
-            onClick={copyAddress}
-            variant="outline"
-            size="sm"
-            className="absolute top-2 right-2 h-7 px-2 text-xs gap-1"
-          >
-            {copied === "addr" ? (
-              <>
-                <Check className="h-3 w-3" /> Copied
-              </>
-            ) : (
-              <>
-                <Copy className="h-3 w-3" /> Copy
-              </>
-            )}
-          </Button>
-          <p className="font-semibold pr-20">{order.customerName}</p>
-          <p className="text-muted-foreground">
-            {[order.contact1, order.contact2].filter(Boolean).join(", ")}
-          </p>
-          <p className="text-muted-foreground">
-            {[order.address, order.landmark, order.district]
-              .filter(Boolean)
-              .join(", ")}
-            , {order.state} - {order.pincode}
-          </p>
-          {order.instagramId && (
-            <p className="text-muted-foreground">@{order.instagramId}</p>
           )}
-          <div className="flex items-center gap-2 pt-1 flex-wrap">
-            <PayBadge status={order.paymentStatus} />
-            <span className="text-xs text-muted-foreground">
-              {order.shippingMethod === "online" ? "Prepaid" : "COD"}
-            </span>
-            <Addons order={order} />
-            {order.razorpayPaymentId && (
-              <span className="text-xs text-muted-foreground truncate">
-                {order.razorpayPaymentId}
+
+          {/* Items */}
+          <div className="mb-5 space-y-3">
+            {order.items?.map((it, i) => (
+              <div key={i} className="flex items-center gap-3 text-sm">
+                <div className="group/img relative">
+                  <Thumb
+                    url={it.imageUrl}
+                    alt={it.productName}
+                    size="h-14 w-14"
+                  />
+                  {it.imageUrl && (
+                    <button
+                      onClick={() => copyImage(it.imageUrl!, i)}
+                      title="Copy image"
+                      aria-label="Copy image"
+                      className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-950 text-white opacity-0 transition-all focus-visible:opacity-100 group-hover/img:opacity-100 active:scale-90"
+                    >
+                      {copied === i ? (
+                        <Check className="h-3 w-3" strokeWidth={3} />
+                      ) : (
+                        <ImageIcon className="h-3 w-3" />
+                      )}
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-1 items-center justify-between gap-2">
+                  <span className="font-extrabold leading-tight tracking-tight">
+                    {it.productName}
+                    <span className="block text-xs font-semibold text-neutral-500">
+                      Size {it.size}
+                      {it.isFreeItem && (
+                        <span className="ml-2 text-green-700">Free</span>
+                      )}
+                    </span>
+                  </span>
+                  <span className="whitespace-nowrap font-extrabold tracking-tight">
+                    ₹{it.isFreeItem ? 0 : it.price}
+                  </span>
+                </div>
+              </div>
+            ))}
+            <div className="flex items-baseline justify-between border-t border-neutral-200 pt-3">
+              <span className="text-sm font-semibold text-neutral-500">
+                Total
               </span>
+              <span className="text-4xl font-extrabold leading-none tracking-[-0.045em]">
+                ₹{order.totalAmount}
+              </span>
+            </div>
+          </div>
+
+          {/* Customer */}
+          <div className="relative mb-5 space-y-1 rounded-3xl bg-neutral-100 p-4 text-sm">
+            <Btn
+              onClick={copyAddress}
+              className="absolute right-3 top-3 !h-8 !bg-white !px-3 text-xs hover:!bg-neutral-200"
+            >
+              {copied === "addr" ? (
+                <>
+                  <Check className="h-3 w-3" strokeWidth={3} /> Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3 w-3" /> Copy
+                </>
+              )}
+            </Btn>
+            <p className="pr-24 text-lg font-extrabold tracking-tight">
+              {order.customerName}
+            </p>
+            <p className="font-medium text-neutral-500">
+              {[order.contact1, order.contact2].filter(Boolean).join(", ")}
+            </p>
+            <p className="font-medium text-neutral-500">
+              {[order.address, order.landmark, order.district]
+                .filter(Boolean)
+                .join(", ")}
+              , {order.state} - {order.pincode}
+            </p>
+            {order.instagramId && (
+              <p className="font-medium text-neutral-500">
+                @{order.instagramId}
+              </p>
+            )}
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <PayBadge status={order.paymentStatus} />
+              <MethodTag method={order.shippingMethod} />
+              <Addons order={order} />
+              {order.razorpayPaymentId && (
+                <span className="truncate text-xs font-medium text-neutral-400">
+                  {order.razorpayPaymentId}
+                </span>
+              )}
+            </div>
+            {isAbandoned(order) && (
+              <div className="pt-2">
+                <WaButton order={order} />
+              </div>
             )}
           </div>
-          {isAbandoned(order) && (
-            <div className="pt-2">
-              <WaButton order={order} />
-            </div>
-          )}
-        </div>
 
-        {/* Payment details + verification */}
-        <div className="mb-4 p-3 rounded-xl border text-sm space-y-2">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Method</span>
-            <span>{methodLabel}</span>
-          </div>
-          {order.pairCount ? (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Offer</span>
-              <span>{order.pairCount} {order.pairCount === 1 ? "pair" : "pairs"}</span>
-            </div>
-          ) : null}
-          {order.advancePaid != null && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Paid now</span>
-              <span>₹{order.advancePaid}</span>
-            </div>
-          )}
-          {order.remainingAmount ? (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Collect on delivery</span>
-              <span>₹{order.remainingAmount}</span>
-            </div>
-          ) : null}
-          {order.utr && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">UTR</span>
-              <span className="font-mono">{order.utr}</span>
-            </div>
-          )}
-          {order.paymentScreenshotUrl && (
-            <a
-              href={order.paymentScreenshotUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="block"
-            >
-              <img
-                src={`${order.paymentScreenshotUrl}?w=600&auto=format`}
-                alt="Payment screenshot"
-                className="rounded-lg border max-h-64 w-full object-contain bg-gray-50"
-              />
-            </a>
-          )}
-
-          <div>
-            <label className={LABEL}>Payment Status</label>
-            <select {...field("paymentStatus")} className={INPUT}>
-              {PAY_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {PAY_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {order.paymentStatus === "verifying" && (
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                className="flex-1"
-                onClick={() =>
-                  setForm({
-                    ...form,
-                    paymentStatus: "paid",
-                    fulfillmentStatus: "processing",
-                  })
-                }
-              >
-                Approve
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                className="flex-1"
-                onClick={() =>
-                  setForm({
-                    ...form,
-                    paymentStatus: "rejected",
-                    fulfillmentStatus: "cancelled",
-                  })
-                }
-              >
-                Reject
-              </Button>
-            </div>
-          )}
-          {order.paymentStatus === "verifying" && (
-            <p className="text-xs text-muted-foreground">
-              Approve or Reject fills the form. Press Save Changes to apply it.
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className={LABEL}>Fulfillment Status</label>
-            <select {...field("fulfillmentStatus")} className={INPUT}>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {cap(s)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={LABEL}>Courier</label>
-              <input
-                type="text"
-                placeholder="e.g. Delhivery"
-                className={INPUT}
-                {...field("courierName")}
-              />
-            </div>
-            <div>
-              <label className={LABEL}>Tracking Number</label>
-              <input
-                type="text"
-                placeholder="AWB / tracking ID"
-                className={INPUT}
-                {...field("trackingNumber")}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className={LABEL}>Tracking URL</label>
-            <input
-              type="url"
-              placeholder="https://..."
-              className={INPUT}
-              {...field("trackingUrl")}
-            />
-            {form.trackingUrl && (
+          {/* Payment details + verification */}
+          <div className="mb-5 space-y-3 rounded-3xl bg-neutral-100 p-4 text-sm">
+            {row("Method", methodLabel)}
+            {order.pairCount
+              ? row(
+                  "Offer",
+                  `${order.pairCount} ${order.pairCount === 1 ? "pair" : "pairs"}`,
+                )
+              : null}
+            {order.advancePaid != null && row("Paid now", `₹${order.advancePaid}`)}
+            {order.remainingAmount
+              ? row("Collect on delivery", `₹${order.remainingAmount}`)
+              : null}
+            {order.utr && row("UTR", <span className="font-mono">{order.utr}</span>)}
+            {order.paymentScreenshotUrl && (
               <a
-                href={form.trackingUrl}
+                href={order.paymentScreenshotUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-blue-600 mt-1"
+                className="block"
               >
-                Open tracking link <ExternalLink className="h-3 w-3" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`${order.paymentScreenshotUrl}?w=600&auto=format`}
+                  alt="Payment screenshot"
+                  className="max-h-64 w-full rounded-2xl bg-white object-contain"
+                />
               </a>
             )}
-          </div>
 
-          <div>
-            <label className={LABEL}>Admin Notes</label>
-            <textarea
-              rows={2}
-              placeholder="Internal notes about this order..."
-              className={INPUT}
-              {...field("adminNotes")}
-            />
-          </div>
-        </div>
+            <div>
+              <label className={labelCls}>Payment status</label>
+              <select {...field("paymentStatus")} className={inputLg}>
+                {PAY_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {PAY_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 md:gap-3 mt-6 pt-4 border-t sticky bottom-0 bg-white">
-          <Button
-            onClick={onClose}
-            variant="outline"
-            className="w-full sm:w-auto"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={save}
-            variant="secondary"
-            disabled={!!busy}
-            className="gap-2 w-full sm:w-auto"
-          >
-            {busy === "save" ? (
+            {order.paymentStatus === "verifying" && (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Saving...
+                <div className="flex gap-2">
+                  <Btn
+                    variant="primary"
+                    className="flex-1"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        paymentStatus: "paid",
+                        fulfillmentStatus: "processing",
+                      })
+                    }
+                  >
+                    Approve
+                  </Btn>
+                  <Btn
+                    variant="danger"
+                    className="flex-1"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        paymentStatus: "rejected",
+                        fulfillmentStatus: "cancelled",
+                      })
+                    }
+                  >
+                    Reject
+                  </Btn>
+                </div>
+                <p className="text-xs font-medium text-neutral-500">
+                  Approve or Reject fills the form. Press Save changes to apply
+                  it.
+                </p>
               </>
-            ) : (
-              "Save Changes"
             )}
-          </Button>
+          </div>
+
+          <div className="space-y-5">
+            <div>
+              <label className={labelCls}>Fulfillment status</label>
+              <select {...field("fulfillmentStatus")} className={inputLg}>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {cap(s)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>Courier</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Delhivery"
+                  className={inputLg}
+                  {...field("courierName")}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Tracking number</label>
+                <input
+                  type="text"
+                  placeholder="AWB / tracking ID"
+                  className={inputLg}
+                  {...field("trackingNumber")}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelCls}>Tracking URL</label>
+              <input
+                type="url"
+                placeholder="https://..."
+                className={inputLg}
+                {...field("trackingUrl")}
+              />
+              {form.trackingUrl && (
+                <a
+                  href={form.trackingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-extrabold text-blue-700"
+                >
+                  Open tracking link <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+
+            <div>
+              <label className={labelCls}>Admin notes</label>
+              <textarea
+                rows={2}
+                placeholder="Internal notes about this order..."
+                className={inputCls}
+                {...field("adminNotes")}
+              />
+            </div>
+          </div>
+
+          <div className="sticky bottom-0 mt-6 flex flex-col-reverse justify-end gap-2 border-t border-neutral-200 bg-white pt-5 sm:flex-row">
+            <Btn onClick={onClose} className="w-full sm:w-auto">
+              Cancel
+            </Btn>
+            <Btn
+              onClick={save}
+              variant="primary"
+              disabled={!!busy}
+              className="w-full sm:w-auto"
+            >
+              {busy === "save" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                "Save changes"
+              )}
+            </Btn>
+          </div>
         </div>
       </div>
     </div>
@@ -1109,10 +1187,7 @@ export default function OrdersPage() {
 
         setBanner(raw);
         if (soundRef.current) audio.current?.play().catch(() => {});
-        if (
-          "Notification" in window &&
-          Notification.permission === "granted"
-        ) {
+        if ("Notification" in window && Notification.permission === "granted") {
           new Notification("New order received", {
             body: `${raw.customerName} • ₹${raw.totalAmount}`,
             tag: raw._id,
@@ -1271,8 +1346,12 @@ export default function OrdersPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      <div
+        className={`${display.className} flex h-64 items-center justify-center`}
+      >
+        <div className="h-1 w-40 overflow-hidden rounded-full bg-neutral-100">
+          <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-600" />
+        </div>
       </div>
     );
   }
@@ -1283,18 +1362,25 @@ export default function OrdersPage() {
     datePreset !== "all" ||
     methodFilter !== "all" ||
     (tab === "orders" && (statusFilter !== "all" || paymentFilter !== "all"));
+  const bulkOn = tab === "orders" && selectedIds.size > 0;
 
   return (
-    <div className="space-y-4 md:space-y-6 md:p-4 bg-primary">
+    <div
+      className={`${display.className} min-h-screen bg-white px-4 py-6 text-neutral-950 md:px-8 ${
+        bulkOn ? "pb-28" : ""
+      }`}
+    >
       {banner && (
-        <div className="fixed top-4 right-4 z-[60] bg-white border border-green-200 shadow-xl rounded-2xl p-4 max-w-xs animate-in fade-in slide-in-from-top-2">
+        <div className="fixed right-4 top-4 z-[60] max-w-xs rounded-3xl bg-neutral-950 p-4 text-white duration-500 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-start gap-3">
-            <div className="h-9 w-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-              <Bell className="h-4 w-4 text-green-700" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600">
+              <Bell className="h-4 w-4" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold">New order received</p>
-              <p className="text-xs text-muted-foreground truncate">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-extrabold tracking-tight">
+                New order received
+              </p>
+              <p className="truncate text-xs font-medium text-white/60">
                 {banner.customerName} • ₹{banner.totalAmount}
               </p>
               <button
@@ -1302,13 +1388,13 @@ export default function OrdersPage() {
                   setOpen({ id: banner._id });
                   setBanner(null);
                 }}
-                className="text-xs font-semibold text-blue-600 mt-1"
+                className="mt-1 text-xs font-extrabold text-blue-400"
               >
-                View order →
+                View order
               </button>
             </div>
-            <button onClick={() => setBanner(null)}>
-              <X className="h-4 w-4 text-muted-foreground" />
+            <button onClick={() => setBanner(null)} aria-label="Dismiss">
+              <X className="h-4 w-4 text-white/60 hover:text-white" />
             </button>
           </div>
         </div>
@@ -1324,91 +1410,99 @@ export default function OrdersPage() {
         />
       )}
 
-      <div>
-        <div className="bg-white rounded-t-3xl p-4 flex flex-col gap-3">
-          <div className="flex gap-2 flex-wrap">
-            {(
-              [
-                ["orders", "Orders", paidCount],
-                ["abandoned", "Abandoned carts", abandonedCount],
-              ] as const
-            ).map(([key, label, n]) => (
-              <Button
-                key={key}
-                onClick={() => {
-                  setTab(key);
-                  setPage(1);
-                  clearSelection();
-                }}
-                variant={tab === key ? "secondary" : "ghost"}
-                size="sm"
-                className="rounded-full gap-2"
-              >
-                {label}
-                <span className="text-xs opacity-70">{n}</span>
-              </Button>
-            ))}
-            {verifyingCount > 0 && (
-              <Button
-                onClick={() => {
-                  setTab("orders");
-                  setPaymentFilter("verifying");
-                  setPage(1);
-                  clearSelection();
-                }}
-                variant="outline"
-                size="sm"
-                className="rounded-full gap-2 border-blue-300 text-blue-800"
-              >
-                Needs verification
-                <span className="text-xs font-bold">{verifyingCount}</span>
-              </Button>
-            )}
+      <div className="mx-auto max-w-6xl">
+        {/* Header */}
+        <div className="duration-700 animate-in fade-in slide-in-from-bottom-4">
+          <div className="inline-flex items-center gap-2 rounded-md bg-blue-600/10 px-3.5 py-1.5 text-sm font-semibold text-blue-700">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-blue-600 opacity-60 motion-safe:animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-600" />
+            </span>
+            {paidCount} orders
           </div>
-
-          <div className="flex items-center w-full gap-2">
-            <Button
-              onClick={toggleAlerts}
-              variant="outline"
-              className="gap-2 shrink-0 px-2 sm:px-4 text-xs sm:text-sm"
-            >
+          <div className="mt-4 flex items-end justify-between gap-4">
+            <h1 className="text-balance text-5xl font-extrabold leading-[0.9] tracking-[-0.045em] md:text-7xl">
+              Orders.
+            </h1>
+            <Btn onClick={toggleAlerts} variant="primary" className="h-12">
               {alertsOn ? (
                 <Bell className="h-4 w-4" />
               ) : (
                 <BellOff className="h-4 w-4" />
               )}
-              <span className="hidden sm:inline">
+              <span className="hidden md:inline">
                 {notifPerm !== "granted"
                   ? "Enable alerts"
                   : sound
                     ? "Alerts on"
                     : "Sound off"}
               </span>
-            </Button>
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4 md:h-5 md:w-5" />
-              <input
-                type="text"
-                placeholder="Search by order ID, customer, phone, UTR or tracking ID..."
-                value={search}
-                onChange={(e) => reset(setSearch)(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm md:text-base bg-muted rounded-2xl focus:ring-2 text-muted-foreground font-semibold focus:border-transparent"
-              />
-            </div>
+            </Btn>
+          </div>
+        </div>
+
+        {/* Tabs, search and filters */}
+        <div className="mt-8 flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["orders", "Orders", paidCount],
+                ["abandoned", "Abandoned carts", abandonedCount],
+              ] as const
+            ).map(([key, label, n]) => (
+              <Chip
+                key={key}
+                active={tab === key}
+                onClick={() => {
+                  setTab(key);
+                  setPage(1);
+                  clearSelection();
+                }}
+              >
+                {label}
+                <span className="opacity-60">{n}</span>
+              </Chip>
+            ))}
+            {verifyingCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTab("orders");
+                  setPaymentFilter("verifying");
+                  setPage(1);
+                  clearSelection();
+                }}
+                className="flex h-9 items-center gap-1.5 rounded-full bg-blue-600/10 px-4 text-xs font-extrabold tracking-tight text-blue-700 transition-all duration-200 hover:bg-blue-600/20 active:scale-90"
+              >
+                Needs verification
+                <span>{verifyingCount}</span>
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="text-xs md:text-sm text-muted-foreground font-semibold">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            <input
+              type="text"
+              placeholder="Search by order ID, customer, phone, UTR or tracking ID..."
+              value={search}
+              onChange={(e) => reset(setSearch)(e.target.value)}
+              className={`${inputLg} pl-11`}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-neutral-500">
               {count} of {tab === "abandoned" ? abandonedCount : paidCount}{" "}
               {tab === "abandoned" ? "abandoned carts" : "orders"}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
               <select
                 value={methodFilter}
                 onChange={(e) =>
                   reset(setMethodFilter)(e.target.value as MethodFilter)
                 }
-                className={SELECT}
+                className={selectCls}
                 aria-label="Filter by payment method"
               >
                 {METHOD_OPTIONS.map(([k, l]) => (
@@ -1422,7 +1516,7 @@ export default function OrdersPage() {
                 onChange={(e) =>
                   reset(setDatePreset)(e.target.value as DatePreset)
                 }
-                className={SELECT}
+                className={selectCls}
                 aria-label="Filter by date"
               >
                 {DATE_PRESETS.map(([k, l]) => (
@@ -1432,25 +1526,25 @@ export default function OrdersPage() {
                 ))}
               </select>
               {datePreset === "custom" && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <label className="flex items-center gap-1 text-xs text-muted-foreground font-semibold">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-neutral-500">
                     From
                     <input
                       type="date"
                       value={dateFrom}
                       max={dateTo || undefined}
                       onChange={(e) => reset(setDateFrom)(e.target.value)}
-                      className={SELECT}
+                      className={selectCls}
                     />
                   </label>
-                  <label className="flex items-center gap-1 text-xs text-muted-foreground font-semibold">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-neutral-500">
                     To
                     <input
                       type="date"
                       value={dateTo}
                       min={dateFrom || undefined}
                       onChange={(e) => reset(setDateTo)(e.target.value)}
-                      className={SELECT}
+                      className={selectCls}
                     />
                   </label>
                 </div>
@@ -1462,7 +1556,7 @@ export default function OrdersPage() {
                     onChange={(e) =>
                       reset(setPaymentFilter)(e.target.value as any)
                     }
-                    className={SELECT}
+                    className={selectCls}
                     aria-label="Filter by payment status"
                   >
                     <option value="all">All payments</option>
@@ -1479,7 +1573,7 @@ export default function OrdersPage() {
                     onChange={(e) =>
                       reset(setStatusFilter)(e.target.value as any)
                     }
-                    className={SELECT}
+                    className={selectCls}
                     aria-label="Filter by fulfillment status"
                   >
                     <option value="all">All statuses</option>
@@ -1494,7 +1588,8 @@ export default function OrdersPage() {
               <select
                 value={perPage}
                 onChange={(e) => reset(setPerPage)(Number(e.target.value))}
-                className={SELECT}
+                className={selectCls}
+                aria-label="Rows per page"
               >
                 {[5, 10, 20, 50].map((n) => (
                   <option key={n} value={n}>
@@ -1504,62 +1599,10 @@ export default function OrdersPage() {
               </select>
             </div>
           </div>
-
-          {tab === "orders" && selectedIds.size > 0 && (
-            <div className="flex items-center justify-between flex-wrap gap-2 p-3 rounded-2xl bg-blue-50 border border-blue-200">
-              <div className="text-sm font-semibold text-blue-900 flex items-center gap-3 flex-wrap">
-                <span>{selectedIds.size} selected</span>
-                {selectedIds.size < allIds.length && (
-                  <button
-                    onClick={selectAllMatching}
-                    className="text-xs text-blue-600 underline"
-                  >
-                    Select all {allIds.length}
-                  </button>
-                )}
-                <button
-                  onClick={clearSelection}
-                  className="text-xs text-blue-600 underline"
-                >
-                  Clear
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={bulkStatus}
-                  onChange={(e) => setBulkStatus(e.target.value as Fulfillment)}
-                  className={SELECT}
-                  disabled={bulkBusy}
-                  aria-label="Bulk fulfillment status"
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {cap(s)}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  onClick={applyBulkStatus}
-                  size="sm"
-                  variant="secondary"
-                  disabled={bulkBusy}
-                  className="gap-2"
-                >
-                  {bulkBusy ? (
-                    <>
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    "Apply"
-                  )}
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
 
-        <div className="bg-white overflow-hidden">
+        {/* Orders */}
+        <div className="mt-6">
           <OrderList
             orders={rows}
             onOpen={(id, confirm) => setOpen({ id, confirm })}
@@ -1570,12 +1613,15 @@ export default function OrdersPage() {
           />
 
           {rows.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-muted-foreground mb-2 font-semibold">
-                {tab === "abandoned" ? "No abandoned carts" : "No orders found"}
-              </div>
+            <div className="py-16 text-center duration-500 animate-in fade-in">
+              <p className="text-3xl font-extrabold tracking-[-0.04em]">
+                {tab === "abandoned"
+                  ? "No abandoned carts."
+                  : "No orders found."}
+              </p>
               {hasActiveFilters && (
-                <Button
+                <Btn
+                  className="mt-4"
                   onClick={() => {
                     setSearch("");
                     setStatusFilter("all");
@@ -1585,52 +1631,105 @@ export default function OrdersPage() {
                     setDateFrom("");
                     setDateTo("");
                   }}
-                  variant="outline"
                 >
                   Clear filters
-                </Button>
+                </Btn>
               )}
             </div>
           )}
         </div>
 
+        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-white md:rounded-b-3xl p-4">
-            <div className="text-sm text-muted-foreground font-semibold">
+          <div className="mt-6 flex flex-col items-center justify-between gap-3 md:flex-row">
+            <p className="text-sm font-semibold text-neutral-500">
               Page {current} of {totalPages}
-            </div>
-            <div className="flex items-center gap-1 md:gap-2">
-              <Button
+            </p>
+            <div className="flex items-center gap-1.5">
+              <Btn
                 onClick={() => goTo(current - 1)}
                 disabled={current === 1}
-                variant="outline"
-                size="icon"
+                icon
+                title="Previous page"
               >
                 <ChevronLeft className="h-4 w-4" />
-              </Button>
+              </Btn>
               {pageNums.map((n) => (
-                <Button
+                <Btn
                   key={n}
                   onClick={() => goTo(n)}
-                  variant="ghost"
-                  size="icon"
-                  className={`text-sm ${current === n ? "bg-blue-600 text-white" : "hover:bg-gray-100"}`}
+                  icon
+                  variant={current === n ? "primary" : "soft"}
                 >
                   {n}
-                </Button>
+                </Btn>
               ))}
-              <Button
+              <Btn
                 onClick={() => goTo(current + 1)}
                 disabled={current === totalPages}
-                variant="outline"
-                size="icon"
+                icon
+                title="Next page"
               >
                 <ChevronRight className="h-4 w-4" />
-              </Button>
+              </Btn>
             </div>
           </div>
         )}
       </div>
+
+      {/* Bulk action bar */}
+      {bulkOn && (
+        <div className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-[1.75rem] bg-neutral-950 p-3 pl-5 text-white duration-300 animate-in fade-in slide-in-from-bottom-4 md:inset-x-8">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-extrabold tracking-tight">
+              {selectedIds.size} selected
+            </span>
+            {selectedIds.size < allIds.length && (
+              <button
+                onClick={selectAllMatching}
+                className="text-xs font-semibold text-blue-400"
+              >
+                Select all {allIds.length}
+              </button>
+            )}
+            <button
+              onClick={clearSelection}
+              className="text-xs font-semibold text-white/60 hover:text-white"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={bulkStatus}
+              onChange={(e) => setBulkStatus(e.target.value as Fulfillment)}
+              className="h-10 cursor-pointer rounded-full bg-white/10 px-4 text-xs font-extrabold text-white outline-none focus:ring-2 focus:ring-white [&>option]:text-neutral-950"
+              disabled={bulkBusy}
+              aria-label="Bulk fulfillment status"
+            >
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {cap(s)}
+                </option>
+              ))}
+            </select>
+            <Btn
+              onClick={applyBulkStatus}
+              disabled={bulkBusy}
+              className="!bg-white !text-neutral-950 hover:!bg-blue-600 hover:!text-white"
+            >
+              {bulkBusy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Updating…
+                </>
+              ) : (
+                "Apply"
+              )}
+            </Btn>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

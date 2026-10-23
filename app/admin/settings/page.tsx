@@ -25,7 +25,7 @@ export default function SettingsPage() {
   const fetchSettings = useCallback(async () => {
     try {
       let data = await sanityClient.fetch<Settings>(
-        `*[_type == "settings"][0]{ _id, freeSocksOffer, shoeCleanerAddon }`
+        `*[_type == "settings"][0]{ _id, freeSocksOffer, shoeCleanerAddon }`,
       );
       if (!data) {
         // Create the singleton settings doc if it doesn't exist yet
@@ -52,7 +52,10 @@ export default function SettingsPage() {
       setSettings({ ...settings, [key]: newValue });
       setSaving(true);
       try {
-        await sanityClient.patch(settings._id).set({ [key]: newValue }).commit();
+        await sanityClient
+          .patch(settings._id)
+          .set({ [key]: newValue })
+          .commit();
       } catch (error) {
         console.error("Error updating setting:", error);
         alert("Failed to update setting");
@@ -61,7 +64,7 @@ export default function SettingsPage() {
         setSaving(false);
       }
     },
-    [settings]
+    [settings],
   );
 
   if (loading || !settings) {
@@ -76,7 +79,7 @@ export default function SettingsPage() {
     <div className="space-y-4 md:space-y-6 md:p-4 h-screen bg-white rounded-t-3xl">
       {/* <div className="flex items-center justify-between p-2 md:p-4">
         <div>
-          <h1 className="text-4xl text-secondary font-bold tracking-tighter">Footex</h1>
+          <h1 className="text-4xl text-secondary font-bold tracking-tighter">whitewalk</h1>
           <p className="text-xs md:text-sm text-gray-50 bg-secondary px-2 p-1 rounded tracking-tight font-semibold">
             Site Settings
           </p>

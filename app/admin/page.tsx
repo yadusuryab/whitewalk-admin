@@ -4,6 +4,8 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { Inter_Tight } from "next/font/google";
 import {
   Plus,
   Edit,
@@ -17,10 +19,15 @@ import {
   X,
   Upload,
   Loader2,
+  Check,
 } from "lucide-react";
 import { client as sanityClient } from "@/lib/sanity";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+
+const display = Inter_Tight({
+  subsets: ["latin"],
+  weight: ["500", "600", "800"],
+  display: "swap",
+});
 
 const LABEL_OPTIONS = [
   { title: "Trending", value: "trending" },
@@ -56,6 +63,147 @@ interface Shoe {
 
 type StatusFilter = "all" | "active" | "disabled";
 type LabelFilter = "all" | string;
+
+/* ---------- UI atoms ---------- */
+
+const inputCls =
+  "h-12 w-full rounded-2xl bg-neutral-100 px-4 text-sm font-medium outline-none transition-all duration-300 placeholder:text-neutral-400 focus:bg-white focus:ring-2 focus:ring-neutral-950";
+const labelCls = "mb-2 block text-sm font-semibold text-neutral-500";
+const selectCls =
+  "h-9 cursor-pointer rounded-full bg-neutral-100 px-3 text-xs font-semibold outline-none transition-all focus:ring-2 focus:ring-neutral-950";
+
+type BtnProps = {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  variant?: "primary" | "soft" | "danger";
+  icon?: boolean;
+  className?: string;
+  title?: string;
+  type?: "button" | "submit";
+};
+
+const Btn = ({
+  children,
+  onClick,
+  disabled,
+  variant = "soft",
+  icon,
+  className = "",
+  title,
+  type = "button",
+}: BtnProps) => {
+  const v = {
+    primary: "bg-neutral-950 text-white hover:bg-blue-600",
+    soft: "bg-neutral-100 text-neutral-950 hover:bg-neutral-200",
+    danger: "bg-red-50 text-red-600 hover:bg-red-100",
+  }[variant];
+  return (
+    <button
+      type={type}
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full text-sm font-extrabold tracking-tight transition-all duration-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 ${
+        icon ? "w-10" : "px-5"
+      } ${v} ${className}`}
+    >
+      {children}
+    </button>
+  );
+};
+
+const Chip = ({
+  active,
+  onClick,
+  children,
+  danger,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  danger?: boolean;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`flex h-9 items-center gap-1.5 rounded-full px-4 text-xs font-extrabold tracking-tight transition-all duration-200 active:scale-90 ${
+      danger
+        ? active
+          ? "bg-red-50 text-red-500 line-through"
+          : "bg-neutral-100 hover:bg-neutral-200"
+        : active
+          ? "bg-neutral-950 text-white"
+          : "bg-neutral-100 hover:bg-neutral-200"
+    }`}
+  >
+    {!danger && active && <Check className="h-3 w-3" strokeWidth={3} />}
+    {children}
+  </button>
+);
+
+const StatusPill = ({
+  disabled,
+  onClick,
+}: {
+  disabled: boolean;
+  onClick: () => void;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-extrabold tracking-tight transition-all duration-300 active:scale-95 ${
+      disabled
+        ? "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
+        : "bg-blue-600/10 text-blue-700 hover:bg-blue-600/20"
+    }`}
+  >
+    {disabled ? (
+      <>
+        <EyeOff className="h-3.5 w-3.5" /> Disabled
+      </>
+    ) : (
+      <>
+        <Eye className="h-3.5 w-3.5" /> Active
+      </>
+    )}
+  </button>
+);
+
+const Tag = ({
+  children,
+  blue,
+}: {
+  children: React.ReactNode;
+  blue?: boolean;
+}) => (
+  <span
+    className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${
+      blue ? "bg-blue-600/10 text-blue-700" : "bg-neutral-100 text-neutral-600"
+    }`}
+  >
+    {children}
+  </span>
+);
+
+// Small badge showing which offers a product appears in
+const OfferChips = ({ shoe }: { shoe: Shoe }) => {
+  const on = OFFER_OPTIONS.filter(([k]) =>
+    k === "offer1Pair" ? (shoe[k] ?? true) : (shoe[k] ?? false),
+  );
+  if (!on.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {on.map(([k, t]) => (
+        <Tag key={k} blue>
+          {t}
+        </Tag>
+      ))}
+    </div>
+  );
+};
+
+/* ---------- Page ---------- */
 
 export default function ProductsPage() {
   const [shoes, setShoes] = useState<Shoe[]>([]);
@@ -120,7 +268,7 @@ export default function ProductsPage() {
           offer1Pair,
           offer2Pair,
           offer3Pair
-        }`
+        }`,
       );
       setShoes(data);
     } catch (error) {
@@ -130,7 +278,6 @@ export default function ProductsPage() {
     }
   }, []);
 
-  // Fetch products
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
@@ -208,7 +355,7 @@ export default function ProductsPage() {
     async (id: string, currentStatus: boolean) => {
       if (
         !confirm(
-          `Are you sure you want to ${currentStatus ? "enable" : "disable"} this product?`
+          `Are you sure you want to ${currentStatus ? "enable" : "disable"} this product?`,
         )
       )
         return;
@@ -221,19 +368,21 @@ export default function ProductsPage() {
 
         setShoes((prev) =>
           prev.map((shoe) =>
-            shoe._id === id ? { ...shoe, isDisabled: !currentStatus } : shoe
-          )
+            shoe._id === id ? { ...shoe, isDisabled: !currentStatus } : shoe,
+          ),
         );
         // Keep the open modal in sync
         setEditingProduct((prev) =>
-          prev && prev._id === id ? { ...prev, isDisabled: !currentStatus } : prev
+          prev && prev._id === id
+            ? { ...prev, isDisabled: !currentStatus }
+            : prev,
         );
       } catch (error) {
         console.error("Error updating product:", error);
         alert("Failed to update product status");
       }
     },
-    []
+    [],
   );
 
   // Delete product
@@ -262,7 +411,6 @@ export default function ProductsPage() {
       offer2Pair: product.offer2Pair ?? false,
       offer3Pair: product.offer3Pair ?? false,
     });
-    // Reset image state
     setImageFile(null);
     setImagePreview(null);
   };
@@ -342,7 +490,7 @@ export default function ProductsPage() {
         const contentType = res.headers.get("content-type") ?? "";
         if (!contentType.includes("application/json")) {
           throw new Error(
-            `Upload failed (HTTP ${res.status}). Check that the API route exists at app/api/products/[id]/image/route.ts`
+            `Upload failed (HTTP ${res.status}). Check that the API route exists at app/api/products/[id]/image/route.ts`,
           );
         }
 
@@ -353,7 +501,6 @@ export default function ProductsPage() {
 
         const { imageRef } = payload;
 
-        // Update local state with new image ref
         setShoes((prev) =>
           prev.map((shoe) =>
             shoe._id === editingProduct._id
@@ -364,8 +511,8 @@ export default function ProductsPage() {
                     asset: { _type: "reference", _ref: imageRef },
                   },
                 }
-              : shoe
-          )
+              : shoe,
+          ),
         );
 
         setUploadingImage(false);
@@ -374,7 +521,10 @@ export default function ProductsPage() {
       const oldOrderNumber = editingProduct.orderNumber;
       // Clamp to [1, totalCount] — totalCount comes from Sanity directly,
       // so it's always correct even if shoes[] only partially loaded.
-      const finalOrderNumber = Math.max(1, Math.min(editForm.orderNumber, totalCount));
+      const finalOrderNumber = Math.max(
+        1,
+        Math.min(editForm.orderNumber, totalCount),
+      );
       const orderChanged = finalOrderNumber !== oldOrderNumber;
 
       if (orderChanged) {
@@ -384,12 +534,16 @@ export default function ProductsPage() {
         // We cannot use the local shoes[] array for reordering because Sanity
         // silently caps fetches — shoes[] may only contain a subset of products,
         // which causes splice-based reordering to cap at the wrong maximum.
-        const allShoes = await sanityClient.fetch<{ _id: string; orderNumber: number }[]>(
-          `*[_type == "shoe"] | order(orderNumber asc) [0...${totalCount + 100}] { _id, orderNumber }`
+        const allShoes = await sanityClient.fetch<
+          { _id: string; orderNumber: number }[]
+        >(
+          `*[_type == "shoe"] | order(orderNumber asc) [0...${totalCount + 100}] { _id, orderNumber }`,
         );
 
         // Remove the edited shoe, insert at the target position, re-sequence.
-        const withoutEdited = allShoes.filter((s) => s._id !== editingProduct._id);
+        const withoutEdited = allShoes.filter(
+          (s) => s._id !== editingProduct._id,
+        );
         withoutEdited.splice(finalOrderNumber - 1, 0, {
           _id: editingProduct._id,
           orderNumber: finalOrderNumber,
@@ -409,17 +563,27 @@ export default function ProductsPage() {
         const BATCH = 50;
         for (let i = 0; i < changed.length; i += BATCH) {
           await Promise.all(
-            changed.slice(i, i + BATCH).map((s) =>
-              sanityClient.patch(s._id).set({ orderNumber: s.orderNumber }).commit()
-            )
+            changed
+              .slice(i, i + BATCH)
+              .map((s) =>
+                sanityClient
+                  .patch(s._id)
+                  .set({ orderNumber: s.orderNumber })
+                  .commit(),
+              ),
           );
         }
 
         // Update local state order numbers for docs we have in memory
         setShoes((prev) => {
-          const orderMap = new Map(reordered.map((s) => [s._id, s.orderNumber]));
+          const orderMap = new Map(
+            reordered.map((s) => [s._id, s.orderNumber]),
+          );
           return prev
-            .map((s) => ({ ...s, orderNumber: orderMap.get(s._id) ?? s.orderNumber }))
+            .map((s) => ({
+              ...s,
+              orderNumber: orderMap.get(s._id) ?? s.orderNumber,
+            }))
             .sort((a, b) => a.orderNumber - b.orderNumber);
         });
 
@@ -456,9 +620,9 @@ export default function ProductsPage() {
                   offer2Pair: editForm.offer2Pair,
                   offer3Pair: editForm.offer3Pair,
                 }
-              : shoe
+              : shoe,
           )
-          .sort((a, b) => a.orderNumber - b.orderNumber)
+          .sort((a, b) => a.orderNumber - b.orderNumber),
       );
 
       closeEdit();
@@ -478,132 +642,142 @@ export default function ProductsPage() {
     }
   };
 
-  // Small badge showing which offers a product appears in
-  const OfferChips = ({ shoe }: { shoe: Shoe }) => {
-    const on = OFFER_OPTIONS.filter(
-      ([k]) => (k === "offer1Pair" ? shoe[k] ?? true : shoe[k] ?? false)
-    );
-    if (!on.length) return null;
-    return (
-      <div className="flex flex-wrap gap-1 mt-1">
-        {on.map(([k, t]) => (
-          <span
-            key={k}
-            className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-semibold"
-          >
-            {t}
-          </span>
-        ))}
-      </div>
-    );
-  };
-
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div
+        className={`${display.className} flex h-64 items-center justify-center`}
+      >
+        <div className="h-1 w-40 overflow-hidden rounded-full bg-neutral-100">
+          <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-600" />
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-4 md:space-y-6 md:p-4 bg-primary">
-      <div>
-        {/* Search and Filters */}
-        <div className="bg-white rounded-t-3xl p-4 md:p-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4 md:h-5 md:w-5" />
-                <input
-                  type="text"
-                  placeholder="Search by ID, name, or order number..."
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full pl-9 pr-4 py-2 text-sm md:text-base bg-muted rounded-2xl focus:ring-2 text-muted-foreground font-semibold focus:border-transparent"
-                />
-              </div>
-              <div>
-                <Link href="/admin/products/new">
-                  <Button>
-                    <Plus className="h-4 w-4" /> <span className="hidden md:inline">Add Shoe</span>
-                  </Button>
-                </Link>
-              </div>
-            </div>
+  const orderTaken =
+    editingProduct &&
+    editForm.orderNumber !== editingProduct.orderNumber &&
+    editForm.orderNumber <= totalCount &&
+    shoes.find(
+      (s) =>
+        s.orderNumber === editForm.orderNumber && s._id !== editingProduct._id,
+    );
 
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="text-xs md:text-sm text-muted-foreground font-semibold">
-                {filteredProducts.length} of {shoes.length} products
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value as StatusFilter);
-                    setCurrentPage(1);
-                  }}
-                  className="text-xs md:text-sm rounded-full bg-muted font-semibold px-2 py-1"
-                >
-                  <option value="all">All status</option>
-                  <option value="active">Active only</option>
-                  <option value="disabled">Disabled only</option>
-                </select>
-                <select
-                  value={labelFilter}
-                  onChange={(e) => {
-                    setLabelFilter(e.target.value as LabelFilter);
-                    setCurrentPage(1);
-                  }}
-                  className="text-xs md:text-sm rounded-full bg-muted font-semibold px-2 py-1"
-                >
-                  <option value="all">All labels</option>
-                  {LABEL_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.title}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="text-xs md:text-sm rounded-full bg-muted font-semibold px-2 py-1"
-                >
-                  <option value="5">5 per page</option>
-                  <option value="10">10 per page</option>
-                  <option value="20">20 per page</option>
-                  <option value="50">50 per page</option>
-                </select>
-              </div>
+  return (
+    <div
+      className={`${display.className} min-h-screen bg-white px-4 py-6 text-neutral-950 md:px-8`}
+    >
+      <div className="mx-auto max-w-6xl">
+        {/* Header */}
+        <div className="duration-700 animate-in fade-in slide-in-from-bottom-4">
+          <div className="inline-flex items-center gap-2 rounded-md bg-blue-600/10 px-3.5 py-1.5 text-sm font-semibold text-blue-700">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-blue-600 opacity-60 motion-safe:animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-600" />
+            </span>
+            {totalCount} products
+          </div>
+          <div className="mt-4 flex items-end justify-between gap-4">
+            <h1 className="text-balance text-5xl font-extrabold leading-[0.9] tracking-[-0.045em] md:text-7xl">
+              Products.
+            </h1>
+            <Link href="/admin/products/new">
+              <Btn variant="primary" className="h-12">
+                <Plus className="h-4 w-4" />
+                <span className="hidden md:inline">Add shoe</span>
+              </Btn>
+            </Link>
+          </div>
+        </div>
+
+        {/* Search and Filters */}
+        <div className="mt-8 flex flex-col gap-3">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            <input
+              type="text"
+              placeholder="Search by ID, name, or order number..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className={`${inputCls} pl-11`}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-neutral-500">
+              {filteredProducts.length} of {shoes.length} products
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value as StatusFilter);
+                  setCurrentPage(1);
+                }}
+                className={selectCls}
+              >
+                <option value="all">All status</option>
+                <option value="active">Active only</option>
+                <option value="disabled">Disabled only</option>
+              </select>
+              <select
+                value={labelFilter}
+                onChange={(e) => {
+                  setLabelFilter(e.target.value as LabelFilter);
+                  setCurrentPage(1);
+                }}
+                className={selectCls}
+              >
+                <option value="all">All labels</option>
+                {LABEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.title}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className={selectCls}
+              >
+                <option value="5">5 per page</option>
+                <option value="10">10 per page</option>
+                <option value="20">20 per page</option>
+                <option value="50">50 per page</option>
+              </select>
             </div>
           </div>
         </div>
 
         {/* Edit Modal */}
         {editingProduct && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-2xl flex items-center justify-center z-50 p-2 md:p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-2 max-h-[90vh] overflow-y-auto">
-              <div className="p-4 md:p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold tracking-tight">Edit Product</h3>
-                  <Button onClick={closeEdit} variant={"ghost"} size="icon">
-                    <X />
-                  </Button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/70 p-3 backdrop-blur-md duration-300 animate-in fade-in md:p-4">
+            <div
+              className={`${display.className} max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[1.75rem] bg-white text-neutral-950 duration-300 animate-in zoom-in-95 slide-in-from-bottom-4`}
+            >
+              <div className="p-5 md:p-6">
+                <div className="mb-5 flex items-start justify-between">
+                  <h3 className="text-4xl font-extrabold leading-[0.92] tracking-[-0.045em]">
+                    Edit
+                    <br />
+                    product.
+                  </h3>
+                  <Btn onClick={closeEdit} icon title="Close">
+                    <X className="h-4 w-4" />
+                  </Btn>
                 </div>
 
                 {/* Product Image with Replace Option */}
                 <div className="mb-6">
-                  <label className="block text-sm font-semibold text-muted-foreground mb-2">
-                    Product Image
-                  </label>
+                  <label className={labelCls}>Product image</label>
 
-                  <div className="relative rounded-xl overflow-hidden border bg-gray-50 aspect-square w-full max-w-[200px] mx-auto mb-3">
+                  <div className="relative mx-auto mb-3 aspect-square w-full max-w-[200px] overflow-hidden rounded-[1.5rem] bg-neutral-100">
                     {imagePreview ? (
                       <>
                         <Image
@@ -611,17 +785,17 @@ export default function ProductsPage() {
                           alt="New image preview"
                           fill
                           sizes="200px"
-                          className="object-cover"
+                          className="object-cover duration-500 animate-in fade-in zoom-in-95"
                         />
-                        {/* Clear new image selection */}
                         <button
+                          type="button"
                           onClick={clearImageSelection}
-                          className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition"
+                          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-neutral-950 backdrop-blur transition-all hover:bg-white active:scale-90"
                           title="Remove selected image"
                         >
-                          <X className="h-3 w-3" />
+                          <X className="h-4 w-4" />
                         </button>
-                        <div className="absolute bottom-0 left-0 right-0 bg-blue-600/90 text-white text-xs text-center py-1 font-medium">
+                        <div className="absolute bottom-0 left-0 right-0 bg-blue-600 py-1.5 text-center text-xs font-semibold text-white">
                           New image selected
                         </div>
                       </>
@@ -635,14 +809,13 @@ export default function ProductsPage() {
                         quality={80}
                       />
                     ) : (
-                      <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2">
+                      <div className="flex h-full flex-col items-center justify-center gap-2 text-neutral-400">
                         <ImageIcon className="h-10 w-10" />
-                        <span className="text-xs">No image</span>
+                        <span className="text-xs font-semibold">No image</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Hidden file input */}
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -652,41 +825,35 @@ export default function ProductsPage() {
                     id="image-replace-input"
                   />
 
-                  <Button
+                  <Btn
                     onClick={() => fileInputRef.current?.click()}
-                    variant="outline"
-                    className="w-full gap-2"
-                    type="button"
+                    className="w-full"
                   >
                     <Upload className="h-4 w-4" />
-                    {imageFile ? "Change Selected Image" : "Replace Image"}
-                  </Button>
-                  <p className="text-xs text-muted-foreground text-center mt-1.5">
+                    {imageFile ? "Change selected image" : "Replace image"}
+                  </Btn>
+                  <p className="mt-2 text-center text-xs font-medium text-neutral-400">
                     JPEG, PNG, WebP or AVIF · Max 10MB
                   </p>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <div>
-                    <label className="block text-sm font-semibold text-muted-foreground mb-1">
-                      Product Name
-                    </label>
+                    <label className={labelCls}>Product name</label>
                     <input
                       type="text"
                       value={editForm.productName}
                       onChange={(e) =>
                         setEditForm({ ...editForm, productName: e.target.value })
                       }
-                      className="w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className={inputCls}
                       placeholder="Enter product name"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-muted-foreground mb-1">
-                        Order Number
-                      </label>
+                      <label className={labelCls}>Order number</label>
                       <input
                         type="number"
                         min={1}
@@ -699,34 +866,31 @@ export default function ProductsPage() {
                         onBlur={(e) => {
                           // Clamp only when the user leaves the field
                           const raw = parseInt(e.target.value) || 1;
-                          const clamped = Math.max(1, Math.min(raw, totalCount));
+                          const clamped = Math.max(
+                            1,
+                            Math.min(raw, totalCount),
+                          );
                           setEditForm({ ...editForm, orderNumber: clamped });
                         }}
-                        className={`w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:border-transparent ${
+                        className={`${inputCls} ${
                           editForm.orderNumber !== editingProduct.orderNumber
-                            ? "border-amber-400 focus:ring-amber-400 bg-amber-50"
-                            : "focus:ring-blue-500"
+                            ? "!bg-amber-50 ring-2 ring-amber-400 focus:!ring-amber-400"
+                            : ""
                         }`}
                       />
                       {editForm.orderNumber !== editingProduct.orderNumber && (
-                        <p className="text-xs text-amber-600 mt-1 font-medium">
+                        <p className="mt-2 text-xs font-semibold text-amber-600 duration-300 animate-in fade-in slide-in-from-top-1">
                           {editForm.orderNumber > totalCount
                             ? `Max is ${totalCount} — will be placed last`
-                            : shoes.find(
-                                (s) =>
-                                  s.orderNumber === editForm.orderNumber &&
-                                  s._id !== editingProduct._id
-                              )
-                            ? `#${editForm.orderNumber} is taken — products will shift`
-                            : "Other products will be re-numbered"}
+                            : orderTaken
+                              ? `#${editForm.orderNumber} is taken — products will shift`
+                              : "Other products will be re-numbered"}
                         </p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-muted-foreground mb-1">
-                        Price (₹)
-                      </label>
+                      <label className={labelCls}>Price (₹)</label>
                       <input
                         type="number"
                         step="0.01"
@@ -737,239 +901,203 @@ export default function ProductsPage() {
                             price: parseFloat(e.target.value) || 0,
                           })
                         }
-                        className="w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className={inputCls}
                         placeholder="0.00"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-muted-foreground mb-2">
-                      Product Label
-                    </label>
+                    <label className={labelCls}>Product label</label>
                     <div className="flex flex-wrap gap-2">
                       {LABEL_OPTIONS.map((opt) => (
-                        <label
+                        <Chip
                           key={opt.value}
-                          className="flex items-center gap-2 text-xs border rounded-lg px-3 py-2 cursor-pointer"
+                          active={editForm.productLabel.includes(opt.value)}
+                          onClick={() => toggleEditLabel(opt.value)}
                         >
-                          <input
-                            type="checkbox"
-                            checked={editForm.productLabel.includes(opt.value)}
-                            onChange={() => toggleEditLabel(opt.value)}
-                          />
                           {opt.title}
-                        </label>
+                        </Chip>
                       ))}
                     </div>
                   </div>
 
-                  {/* Offers */}
                   <div>
-                    <label className="block text-sm font-semibold text-muted-foreground mb-2">
-                      Show in offers
-                    </label>
+                    <label className={labelCls}>Show in offers</label>
                     <div className="flex flex-wrap gap-2">
                       {OFFER_OPTIONS.map(([key, title]) => (
-                        <label
+                        <Chip
                           key={key}
-                          className="flex items-center gap-2 text-xs border rounded-lg px-3 py-2 cursor-pointer"
+                          active={editForm[key]}
+                          onClick={() => toggleEditOffer(key)}
                         >
-                          <input
-                            type="checkbox"
-                            checked={editForm[key]}
-                            onChange={() => toggleEditOffer(key)}
-                          />
                           {title}
-                        </label>
+                        </Chip>
                       ))}
                     </div>
                   </div>
 
-                  {/* Size availability */}
                   <div>
-                    <label className="block text-sm font-semibold text-muted-foreground mb-2">
-                      Sizes <span className="font-normal">(tap to disable)</span>
+                    <label className={labelCls}>
+                      Sizes{" "}
+                      <span className="font-medium text-neutral-400">
+                        (tap to disable)
+                      </span>
                     </label>
                     <div className="flex flex-wrap gap-2">
-                      {(editingProduct.sizes?.length ? editingProduct.sizes : DEFAULT_SIZES).map(
-                        (size) => {
-                          const off = editForm.disabledSizes.includes(size);
-                          return (
-                            <button
-                              key={size}
-                              type="button"
-                              onClick={() => toggleEditSize(size)}
-                              className={`h-9 min-w-9 px-3 rounded-lg border text-sm font-semibold transition ${
-                                off
-                                  ? "bg-red-50 border-red-300 text-red-500 line-through"
-                                  : "bg-white hover:bg-gray-50"
-                              }`}
-                            >
-                              {size}
-                            </button>
-                          );
-                        }
-                      )}
+                      {(editingProduct.sizes?.length
+                        ? editingProduct.sizes
+                        : DEFAULT_SIZES
+                      ).map((size) => (
+                        <Chip
+                          key={size}
+                          danger
+                          active={editForm.disabledSizes.includes(size)}
+                          onClick={() => toggleEditSize(size)}
+                        >
+                          {size}
+                        </Chip>
+                      ))}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <div className="flex items-center justify-between rounded-3xl bg-neutral-100 p-4">
                     <div>
-                      <p className="text-sm font-medium">Status</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-sm font-extrabold tracking-tight">
+                        Status
+                      </p>
+                      <p className="text-xs font-medium text-neutral-500">
                         {editingProduct.isDisabled ? "Disabled" : "Active"}
                       </p>
                     </div>
-                    <Button
+                    <StatusPill
+                      disabled={editingProduct.isDisabled}
                       onClick={() =>
-                        toggleProductStatus(editingProduct._id, editingProduct.isDisabled)
+                        toggleProductStatus(
+                          editingProduct._id,
+                          editingProduct.isDisabled,
+                        )
                       }
-                      className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
-                        editingProduct.isDisabled
-                          ? "bg-gray-200 text-gray-800 hover:bg-gray-300"
-                          : "bg-green-100 text-green-800 hover:bg-green-200"
-                      }`}
-                    >
-                      {editingProduct.isDisabled ? "Enable" : "Disable"}
-                    </Button>
+                    />
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2 md:gap-3 mt-6 pt-4 border-t">
-                  <Button onClick={closeEdit} variant={"outline"}>
-                    Cancel
-                  </Button>
-                  <Button
+                <div className="mt-6 flex justify-end gap-2 border-t border-neutral-200 pt-5">
+                  <Btn onClick={closeEdit}>Cancel</Btn>
+                  <Btn
                     onClick={saveEdit}
-                    variant={"secondary"}
+                    variant="primary"
                     disabled={uploadingImage || reorderSaving}
-                    className="gap-2"
                   >
                     {uploadingImage ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Uploading...
+                        Uploading…
                       </>
                     ) : reorderSaving ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Reordering...
+                        Reordering…
                       </>
                     ) : (
-                      "Save Changes"
+                      "Save changes"
                     )}
-                  </Button>
+                  </Btn>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Products Table - Responsive */}
-        <div className="bg-white overflow-hidden">
+        {/* Products */}
+        <div className="mt-6">
           {mobileView ? (
-            /* Mobile Card View */
-            <div className="divide-y divide-muted">
-              {filteredProducts.map((shoe) => {
+            /* Mobile card view */
+            <div className="space-y-3">
+              {filteredProducts.map((shoe, i) => {
                 const imageUrl = getOptimizedImageUrl(shoe.images);
 
                 return (
                   <div
                     key={shoe._id}
-                    className={`p-3 ${shoe.isDisabled ? "bg-muted" : ""}`}
+                    style={{
+                      animationDelay: `${(i % 10) * 45}ms`,
+                      animationFillMode: "both",
+                    }}
+                    className={`rounded-[1.75rem] p-3 duration-500 animate-in fade-in slide-in-from-bottom-3 ${
+                      shoe.isDisabled ? "bg-neutral-50 opacity-70" : "bg-neutral-100"
+                    }`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          {imageUrl ? (
-                            <div className="relative h-16 w-16 rounded-xl overflow-hidden flex-shrink-0">
-                              <Image
-                                src={imageUrl}
-                                alt={shoe.productName}
-                                fill
-                                sizes="(max-width: 768px) 64px, 64px"
-                                className="object-cover"
-                                loading="lazy"
-                                quality={70}
-                              />
-                            </div>
-                          ) : (
-                            <div className="h-16 w-16 bg-gray-200 rounded flex items-center justify-center flex-shrink-0">
-                              <ImageIcon className="h-6 w-6 text-gray-400" />
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <div className="font-semibold text-foreground tracking-tight text-sm">
-                              #{shoe.orderNumber} - {shoe.productName}
-                            </div>
-                            <div className="text-md tracking-tight text-muted-foreground font-semibold">
-                              ₹{shoe.price}
-                            </div>
-                            {shoe.productLabel && shoe.productLabel.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {shoe.productLabel.map((label) => (
-                                  <span
-                                    key={label}
-                                    className="text-[10px] bg-secondary/10 text-secondary px-2 py-0.5 rounded-full font-semibold"
-                                  >
-                                    {LABEL_OPTIONS.find((o) => o.value === label)?.title || label}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            <OfferChips shoe={shoe} />
-                            {!!shoe.disabledSizes?.length && (
-                              <div className="text-[10px] text-red-500 font-semibold mt-1">
-                                Sizes off: {shoe.disabledSizes.join(", ")}
-                              </div>
-                            )}
-                          </div>
+                    <div className="flex items-start gap-3">
+                      {imageUrl ? (
+                        <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-white">
+                          <Image
+                            src={imageUrl}
+                            alt={shoe.productName}
+                            fill
+                            sizes="80px"
+                            className="object-cover"
+                            loading="lazy"
+                            quality={70}
+                          />
                         </div>
-
-                        <div className="flex items-center justify-between mt-3">
-                          <Button
-                            onClick={() => toggleProductStatus(shoe._id, shoe.isDisabled)}
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              shoe.isDisabled
-                                ? "bg-gray-100 text-gray-800"
-                                : "bg-green-100 text-green-800"
-                            }`}
-                          >
-                            {shoe.isDisabled ? (
-                              <>
-                                <EyeOff className="h-3 w-3 mr-1" />
-                                Disabled
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="h-3 w-3 mr-1" />
-                                Active
-                              </>
-                            )}
-                          </Button>
-
-                          <div className="flex items-center gap-2">
-                            <Button
-                              onClick={() => startEdit(shoe)}
-                              className="text-blue-600 hover:text-blue-800 p-1"
-                              variant={"outline"}
-                              title="Edit"
-                            >
-                              <Edit className="h-4 w-4" />
-                              Edit
-                            </Button>
-                            <Button
-                              onClick={() => deleteProduct(shoe._id)}
-                              className="text-red-600 hover:text-red-800 p-1"
-                              size={"icon"}
-                              variant={"outline"}
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                      ) : (
+                        <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-2xl bg-white">
+                          <ImageIcon className="h-6 w-6 text-neutral-300" />
                         </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-neutral-400">
+                          #{shoe.orderNumber}
+                        </p>
+                        <p className="truncate text-base font-extrabold leading-tight tracking-tight">
+                          {shoe.productName}
+                        </p>
+                        <p className="text-2xl font-extrabold leading-none tracking-[-0.04em]">
+                          ₹{shoe.price}
+                        </p>
+                        {shoe.productLabel && shoe.productLabel.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {shoe.productLabel.map((label) => (
+                              <Tag key={label}>
+                                {LABEL_OPTIONS.find((o) => o.value === label)
+                                  ?.title || label}
+                              </Tag>
+                            ))}
+                          </div>
+                        )}
+                        <OfferChips shoe={shoe} />
+                        {!!shoe.disabledSizes?.length && (
+                          <p className="mt-1.5 text-[11px] font-semibold text-red-500">
+                            Sizes off: {shoe.disabledSizes.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between">
+                      <StatusPill
+                        disabled={shoe.isDisabled}
+                        onClick={() =>
+                          toggleProductStatus(shoe._id, shoe.isDisabled)
+                        }
+                      />
+                      <div className="flex items-center gap-2">
+                        <Btn
+                          onClick={() => startEdit(shoe)}
+                          className="!bg-white hover:!bg-neutral-200"
+                        >
+                          <Edit className="h-4 w-4" />
+                          Edit
+                        </Btn>
+                        <Btn
+                          onClick={() => deleteProduct(shoe._id)}
+                          icon
+                          variant="danger"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Btn>
                       </div>
                     </div>
                   </div>
@@ -977,77 +1105,86 @@ export default function ProductsPage() {
               })}
             </div>
           ) : (
-            /* Desktop Table View */
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+            /* Desktop table view */
+            <div className="overflow-x-auto rounded-[1.75rem] bg-neutral-100 p-2">
+              <table className="min-w-full">
+                <thead>
                   <tr>
-                    {["Order #", "Product", "Price", "Label", "Offers", "Sizes off", "Status", "Actions"].map(
-                      (h) => (
-                        <th
-                          key={h}
-                          className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          {h}
-                        </th>
-                      )
-                    )}
+                    {[
+                      "Order #",
+                      "Product",
+                      "Price",
+                      "Label",
+                      "Offers",
+                      "Sizes off",
+                      "Status",
+                      "Actions",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.25em] text-neutral-400"
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
 
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredProducts.map((shoe) => {
+                <tbody>
+                  {filteredProducts.map((shoe, i) => {
                     const imageUrl = getOptimizedImageUrl(shoe.images);
 
                     return (
-                      <tr key={shoe._id} className={shoe.isDisabled ? "bg-gray-50" : ""}>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <tr
+                        key={shoe._id}
+                        style={{
+                          animationDelay: `${(i % 10) * 35}ms`,
+                          animationFillMode: "both",
+                        }}
+                        className={`group border-t border-neutral-200 duration-500 animate-in fade-in slide-in-from-bottom-2 transition-colors hover:bg-white ${
+                          shoe.isDisabled ? "opacity-60" : ""
+                        }`}
+                      >
+                        <td className="whitespace-nowrap px-4 py-3 text-lg font-extrabold tracking-tight">
                           {shoe.orderNumber}
                         </td>
 
                         <td className="px-4 py-3">
                           <div className="flex items-center">
                             {imageUrl ? (
-                              <div className="relative h-10 w-10 rounded overflow-hidden mr-3 flex-shrink-0">
+                              <div className="relative mr-3 h-12 w-12 flex-shrink-0 overflow-hidden rounded-2xl bg-white">
                                 <Image
                                   src={imageUrl}
                                   alt={shoe.productName}
                                   fill
-                                  sizes="(max-width: 768px) 40px, 40px"
-                                  className="object-cover"
+                                  sizes="48px"
+                                  className="object-cover transition-transform duration-500 group-hover:scale-110"
                                   loading="lazy"
                                   quality={70}
                                 />
                               </div>
                             ) : (
-                              <div className="h-10 w-10 bg-gray-200 rounded flex items-center justify-center mr-3 flex-shrink-0">
-                                <ImageIcon className="h-5 w-5 text-gray-400" />
+                              <div className="mr-3 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-white">
+                                <ImageIcon className="h-5 w-5 text-neutral-300" />
                               </div>
                             )}
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
-                                {shoe.productName}
-                              </div>
-                              {shoe.isDisabled && (
-                                <div className="text-xs text-gray-500">Disabled</div>
-                              )}
-                            </div>
+                            <p className="max-w-[200px] truncate text-sm font-extrabold tracking-tight">
+                              {shoe.productName}
+                            </p>
                           </div>
                         </td>
 
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        <td className="whitespace-nowrap px-4 py-3 text-sm font-extrabold tracking-tight">
                           ₹{shoe.price}
                         </td>
 
                         <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-1 max-w-[160px]">
+                          <div className="flex max-w-[160px] flex-wrap gap-1">
                             {(shoe.productLabel || []).map((label) => (
-                              <span
-                                key={label}
-                                className="text-[10px] bg-secondary/10 text-secondary px-2 py-0.5 rounded-full font-semibold"
-                              >
-                                {LABEL_OPTIONS.find((o) => o.value === label)?.title || label}
-                              </span>
+                              <Tag key={label}>
+                                {LABEL_OPTIONS.find((o) => o.value === label)
+                                  ?.title || label}
+                              </Tag>
                             ))}
                           </div>
                         </td>
@@ -1056,59 +1193,42 @@ export default function ProductsPage() {
                           <OfferChips shoe={shoe} />
                         </td>
 
-                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                        <td className="whitespace-nowrap px-4 py-3 text-sm">
                           {shoe.disabledSizes?.length ? (
-                            <span className="text-red-500 font-semibold">
+                            <span className="font-semibold text-red-500">
                               {shoe.disabledSizes.join(", ")}
                             </span>
                           ) : (
-                            <span className="text-gray-400">—</span>
+                            <span className="text-neutral-300">—</span>
                           )}
                         </td>
 
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <Button
-                            onClick={() => toggleProductStatus(shoe._id, shoe.isDisabled)}
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              shoe.isDisabled
-                                ? "bg-gray-100 text-gray-800 hover:bg-gray-200"
-                                : "bg-green-100 text-green-800 hover:bg-green-200"
-                            }`}
-                          >
-                            {shoe.isDisabled ? (
-                              <>
-                                <EyeOff className="h-3 w-3 mr-1" />
-                                Disabled
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="h-3 w-3 mr-1" />
-                                Active
-                              </>
-                            )}
-                          </Button>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <StatusPill
+                            disabled={shoe.isDisabled}
+                            onClick={() =>
+                              toggleProductStatus(shoe._id, shoe.isDisabled)
+                            }
+                          />
                         </td>
 
-                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                        <td className="whitespace-nowrap px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <Button
+                            <Btn
                               onClick={() => startEdit(shoe)}
-                              className="text-blue-600 hover:text-blue-800 p-1"
-                              title="Edit"
-                              variant={"outline"}
+                              className="!bg-white hover:!bg-neutral-200"
                             >
                               <Edit className="h-4 w-4" />
                               Edit
-                            </Button>
-                            <Button
+                            </Btn>
+                            <Btn
                               onClick={() => deleteProduct(shoe._id)}
-                              className="text-red-600 hover:text-red-800 p-1"
+                              icon
+                              variant="danger"
                               title="Delete"
-                              size={"icon"}
-                              variant={"outline"}
                             >
                               <Trash2 className="h-4 w-4" />
-                            </Button>
+                            </Btn>
                           </div>
                         </td>
                       </tr>
@@ -1120,19 +1240,21 @@ export default function ProductsPage() {
           )}
 
           {filteredProducts.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-muted-foreground mb-2 font-semibold">No products found</div>
+            <div className="py-16 text-center duration-500 animate-in fade-in">
+              <p className="text-3xl font-extrabold tracking-[-0.04em]">
+                No products found.
+              </p>
               {(search || statusFilter !== "all" || labelFilter !== "all") && (
-                <Button
+                <Btn
+                  className="mt-4"
                   onClick={() => {
                     setSearch("");
                     setStatusFilter("all");
                     setLabelFilter("all");
                   }}
-                  variant={"outline"}
                 >
                   Clear filters
-                </Button>
+                </Btn>
               )}
             </div>
           )}
@@ -1140,21 +1262,19 @@ export default function ProductsPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-white md:rounded-b-3xl p-4">
-            <div className="text-sm text-muted-foreground font-semibold">
+          <div className="mt-6 flex flex-col items-center justify-between gap-3 md:flex-row">
+            <p className="text-sm font-semibold text-neutral-500">
               Page {currentPage} of {totalPages}
-            </div>
+            </p>
 
-            <div className="flex items-center gap-1 md:gap-2">
-              <Button
+            <div className="flex items-center gap-1.5">
+              <Btn
                 onClick={() => goToPage(currentPage - 1)}
                 disabled={currentPage === 1}
-                variant={"outline"}
-                size={"icon"}
-                className="p-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                icon
               >
                 <ChevronLeft className="h-4 w-4" />
-              </Button>
+              </Btn>
 
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let pageNum;
@@ -1169,29 +1289,24 @@ export default function ProductsPage() {
                 }
 
                 return (
-                  <Button
+                  <Btn
                     key={pageNum}
                     onClick={() => goToPage(pageNum)}
-                    className={`px-3 py-1 text-sm ${
-                      currentPage === pageNum ? "bg-blue-600 text-white" : "hover:bg-gray-100"
-                    }`}
-                    variant={"ghost"}
-                    size={"icon"}
+                    icon
+                    variant={currentPage === pageNum ? "primary" : "soft"}
                   >
                     {pageNum}
-                  </Button>
+                  </Btn>
                 );
               })}
 
-              <Button
+              <Btn
                 onClick={() => goToPage(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="p-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-                variant={"outline"}
-                size={"icon"}
+                icon
               >
                 <ChevronRight className="h-4 w-4" />
-              </Button>
+              </Btn>
             </div>
           </div>
         )}

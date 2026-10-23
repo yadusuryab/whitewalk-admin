@@ -55,7 +55,7 @@ export default function BannersPage() {
       const data = await sanityClient.fetch<Banner[]>(
         `*[_type == "banner"] | order(orderNumber asc) {
           _id, title, subtitle, link, orderNumber, isActive, image
-        }`
+        }`,
       );
       setBanners(data);
     } catch (error) {
@@ -84,7 +84,7 @@ export default function BannersPage() {
     try {
       await sanityClient.patch(id).set({ isActive: !current }).commit();
       setBanners((prev) =>
-        prev.map((b) => (b._id === id ? { ...b, isActive: !current } : b))
+        prev.map((b) => (b._id === id ? { ...b, isActive: !current } : b)),
       );
     } catch (error) {
       console.error("Error updating banner:", error);
@@ -143,7 +143,12 @@ export default function BannersPage() {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/avif"];
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/avif",
+    ];
     if (!allowedTypes.includes(file.type)) {
       alert("Invalid file type. Only JPEG, PNG, WebP, and AVIF are allowed.");
       return;
@@ -169,7 +174,10 @@ export default function BannersPage() {
         const endpoint = isNew
           ? `/api/banners/image`
           : `/api/banners/${editingBanner._id}/image`;
-        const res = await fetch(endpoint, { method: isNew ? "POST" : "PUT", body: formData });
+        const res = await fetch(endpoint, {
+          method: isNew ? "POST" : "PUT",
+          body: formData,
+        });
         const contentType = res.headers.get("content-type") ?? "";
         if (!contentType.includes("application/json")) {
           throw new Error(`Upload failed (HTTP ${res.status}).`);
@@ -195,7 +203,9 @@ export default function BannersPage() {
             : undefined,
         });
         setBanners((prev) =>
-          [...prev, created as unknown as Banner].sort((a, b) => a.orderNumber - b.orderNumber)
+          [...prev, created as unknown as Banner].sort(
+            (a, b) => a.orderNumber - b.orderNumber,
+          ),
         );
       } else {
         const patch = sanityClient.patch(editingBanner._id).set({
@@ -205,7 +215,12 @@ export default function BannersPage() {
           orderNumber: editForm.orderNumber,
         });
         if (imageRef) {
-          patch.set({ image: { _type: "image", asset: { _type: "reference", _ref: imageRef } } });
+          patch.set({
+            image: {
+              _type: "image",
+              asset: { _type: "reference", _ref: imageRef },
+            },
+          });
         }
         await patch.commit();
 
@@ -220,12 +235,17 @@ export default function BannersPage() {
                     link: editForm.link,
                     orderNumber: editForm.orderNumber,
                     ...(imageRef
-                      ? { image: { _type: "image", asset: { _type: "reference", _ref: imageRef } } }
+                      ? {
+                          image: {
+                            _type: "image",
+                            asset: { _type: "reference", _ref: imageRef },
+                          },
+                        }
                       : {}),
                   }
-                : b
+                : b,
             )
-            .sort((a, b) => a.orderNumber - b.orderNumber)
+            .sort((a, b) => a.orderNumber - b.orderNumber),
         );
       }
 
@@ -251,7 +271,9 @@ export default function BannersPage() {
     <div className="space-y-4 md:space-y-6 md:p-4 bg-primary">
       <div className="flex items-center justify-between p-2 md:p-4">
         <div>
-          <h1 className="text-4xl text-secondary font-bold tracking-tighter">Footex</h1>
+          <h1 className="text-4xl text-secondary font-bold tracking-tighter">
+            whitewalk
+          </h1>
           <p className="text-xs md:text-sm text-gray-50 bg-secondary px-2 p-1 rounded tracking-tight font-semibold">
             Manage Banners
           </p>
@@ -282,7 +304,13 @@ export default function BannersPage() {
                 </label>
                 <div className="relative rounded-xl overflow-hidden border bg-gray-50 aspect-[2/1] w-full mb-3">
                   {imagePreview ? (
-                    <Image src={imagePreview} alt="New banner" fill sizes="400px" className="object-cover" />
+                    <Image
+                      src={imagePreview}
+                      alt="New banner"
+                      fill
+                      sizes="400px"
+                      className="object-cover"
+                    />
                   ) : editingBanner.image ? (
                     <Image
                       src={getImageUrl(editingBanner.image) || ""}
@@ -305,7 +333,12 @@ export default function BannersPage() {
                   onChange={handleImageSelect}
                   className="hidden"
                 />
-                <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="w-full gap-2" type="button">
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  variant="outline"
+                  className="w-full gap-2"
+                  type="button"
+                >
                   <Upload className="h-4 w-4" />
                   {imageFile ? "Change Selected Image" : "Upload Image"}
                 </Button>
@@ -313,43 +346,60 @@ export default function BannersPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-muted-foreground mb-1">Title</label>
+                  <label className="block text-sm font-semibold text-muted-foreground mb-1">
+                    Title
+                  </label>
                   <input
                     type="text"
                     value={editForm.title}
-                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, title: e.target.value })
+                    }
                     className="w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Banner title"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-muted-foreground mb-1">Subtitle</label>
+                  <label className="block text-sm font-semibold text-muted-foreground mb-1">
+                    Subtitle
+                  </label>
                   <input
                     type="text"
                     value={editForm.subtitle}
-                    onChange={(e) => setEditForm({ ...editForm, subtitle: e.target.value })}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, subtitle: e.target.value })
+                    }
                     className="w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Banner subtitle"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-muted-foreground mb-1">Redirect Link</label>
+                  <label className="block text-sm font-semibold text-muted-foreground mb-1">
+                    Redirect Link
+                  </label>
                   <input
                     type="text"
                     value={editForm.link}
-                    onChange={(e) => setEditForm({ ...editForm, link: e.target.value })}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, link: e.target.value })
+                    }
                     className="w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="/offer?price=1199"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-muted-foreground mb-1">Display Order</label>
+                  <label className="block text-sm font-semibold text-muted-foreground mb-1">
+                    Display Order
+                  </label>
                   <input
                     type="number"
                     min={1}
                     value={editForm.orderNumber}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, orderNumber: parseInt(e.target.value) || 1 })
+                      setEditForm({
+                        ...editForm,
+                        orderNumber: parseInt(e.target.value) || 1,
+                      })
                     }
                     className="w-full px-3 py-2 text-sm rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
@@ -364,7 +414,9 @@ export default function BannersPage() {
                       </p>
                     </div>
                     <Button
-                      onClick={() => toggleActive(editingBanner._id, editingBanner.isActive)}
+                      onClick={() =>
+                        toggleActive(editingBanner._id, editingBanner.isActive)
+                      }
                       className={`px-3 py-1 rounded-lg text-xs font-medium ${
                         editingBanner.isActive
                           ? "bg-green-100 text-green-800 hover:bg-green-200"
@@ -381,7 +433,12 @@ export default function BannersPage() {
                 <Button onClick={closeEdit} variant={"outline"}>
                   Cancel
                 </Button>
-                <Button onClick={saveEdit} variant={"secondary"} disabled={saving} className="gap-2">
+                <Button
+                  onClick={saveEdit}
+                  variant={"secondary"}
+                  disabled={saving}
+                  className="gap-2"
+                >
                   {saving ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -401,14 +458,23 @@ export default function BannersPage() {
         {banners.map((b) => {
           const imageUrl = getImageUrl(b.image);
           return (
-            <div key={b._id} className={`p-3 md:p-4 flex items-center gap-3 ${!b.isActive ? "bg-muted/50" : ""}`}>
+            <div
+              key={b._id}
+              className={`p-3 md:p-4 flex items-center gap-3 ${!b.isActive ? "bg-muted/50" : ""}`}
+            >
               <GripVertical className="h-4 w-4 text-gray-300 flex-shrink-0 hidden md:block" />
               <span className="text-sm font-semibold text-muted-foreground w-6 text-center flex-shrink-0">
                 {b.orderNumber}
               </span>
               {imageUrl ? (
                 <div className="relative h-14 w-24 rounded-lg overflow-hidden flex-shrink-0">
-                  <Image src={imageUrl} alt={b.title || "Banner"} fill sizes="96px" className="object-cover" />
+                  <Image
+                    src={imageUrl}
+                    alt={b.title || "Banner"}
+                    fill
+                    sizes="96px"
+                    className="object-cover"
+                  />
                 </div>
               ) : (
                 <div className="h-14 w-24 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -416,13 +482,21 @@ export default function BannersPage() {
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{b.title || "Untitled banner"}</p>
-                {b.link && <p className="text-xs text-muted-foreground truncate">{b.link}</p>}
+                <p className="text-sm font-medium truncate">
+                  {b.title || "Untitled banner"}
+                </p>
+                {b.link && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {b.link}
+                  </p>
+                )}
               </div>
               <Button
                 onClick={() => toggleActive(b._id, b.isActive)}
                 className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
-                  b.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                  b.isActive
+                    ? "bg-green-100 text-green-800"
+                    : "bg-gray-100 text-gray-800"
                 }`}
               >
                 {b.isActive ? (
@@ -438,10 +512,19 @@ export default function BannersPage() {
                 )}
               </Button>
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Button onClick={() => startEdit(b)} variant={"outline"} title="Edit">
+                <Button
+                  onClick={() => startEdit(b)}
+                  variant={"outline"}
+                  title="Edit"
+                >
                   <Edit className="h-4 w-4" />
                 </Button>
-                <Button onClick={() => deleteBanner(b._id)} variant={"outline"} size={"icon"} title="Delete">
+                <Button
+                  onClick={() => deleteBanner(b._id)}
+                  variant={"outline"}
+                  size={"icon"}
+                  title="Delete"
+                >
                   <Trash2 className="h-4 w-4 text-red-600" />
                 </Button>
               </div>
@@ -451,7 +534,9 @@ export default function BannersPage() {
 
         {banners.length === 0 && (
           <div className="text-center py-12">
-            <div className="text-muted-foreground mb-2 font-semibold">No banners yet</div>
+            <div className="text-muted-foreground mb-2 font-semibold">
+              No banners yet
+            </div>
             <Button onClick={startNew} variant={"outline"}>
               Add your first banner
             </Button>
