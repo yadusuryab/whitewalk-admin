@@ -5,7 +5,8 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { client as sanityClient } from "@/lib/sanity";
-import { ArrowLeft, Upload, X, Video } from "lucide-react";
+import { compressImage, compressVideo } from "@/lib/compress";
+import { ArrowLeft, Upload, X, Video, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -24,7 +25,8 @@ const OFFER_OPTIONS = [
 ] as const;
 
 const DEFAULT_SIZES = [6, 7, 8, 9, 10];
-const MAX_VIDEO_MB = 10;
+const MAX_VIDEO_MB = 10; // target size AFTER compression
+const MAX_INPUT_VIDEO_MB = 300; // largest raw file we'll try to compress
 
 export default function NewProductPage() {
   const router = useRouter();
@@ -35,6 +37,9 @@ export default function NewProductPage() {
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [compressingImages, setCompressingImages] = useState(false);
+  const [compressingVideo, setCompressingVideo] = useState(false);
+  const [compressProgress, setCompressProgress] = useState(0);
 
   const [formData, setFormData] = useState({
     orderNumber: 0,
@@ -44,7 +49,6 @@ export default function NewProductPage() {
 
   const [productLabel, setProductLabel] = useState<string[]>([]);
 
-  // Matches the schema defaults: single-pair on, 2/3 pair off
   const [offers, setOffers] = useState({
     offer1Pair: true,
     offer2Pair: false,
@@ -63,42 +67,63 @@ export default function NewProductPage() {
     );
   };
 
-  // Handle image selection
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle image selection (compress each before adding)
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
-    const newImages = Array.from(files).slice(0, 10); // Limit to 10 images
-    setImages((prev) => [...prev, ...newImages]);
-    setImageError("");
+    const picked = Array.from(files).slice(0, 10);
+    if (fileInputRef.current) fileInputRef.current.value = "";
 
-    // Clear file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+    setCompressingImages(true);
+    setImageError("");
+    try {
+      const compressed = await Promise.all(picked.map((f) => compressImage(f)));
+      setImages((prev) => [...prev, ...compressed]);
+    } catch (err) {
+      console.error(err);
+      setImageError("Failed to process one or more images");
+    } finally {
+      setCompressingImages(false);
     }
   };
 
-  // Remove image
   const removeImage = (index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Handle video selection
-  const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle video selection (compress to under MAX_VIDEO_MB)
+  const handleVideoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (videoInputRef.current) videoInputRef.current.value = "";
     if (!file) return;
 
-    if (!["video/mp4", "video/webm"].includes(file.type)) {
-      setVideoError("Only MP4 or WebM videos are allowed");
-    } else if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
-      setVideoError(`Video must be under ${MAX_VIDEO_MB}MB`);
-    } else {
-      setVideo(file);
-      setVideoError("");
+    if (!file.type.startsWith("video/")) {
+      setVideoError("Please select a video file");
+      return;
+    }
+    if (file.size > MAX_INPUT_VIDEO_MB * 1024 * 1024) {
+      setVideoError(`Video must be under ${MAX_INPUT_VIDEO_MB}MB`);
+      return;
     }
 
-    if (videoInputRef.current) {
-      videoInputRef.current.value = "";
+    setVideoError("");
+    setCompressingVideo(true);
+    setCompressProgress(0);
+    try {
+      const compressed = await compressVideo(file, MAX_VIDEO_MB, setCompressProgress);
+      if (compressed.size > MAX_VIDEO_MB * 1024 * 1024) {
+        setVideoError(
+          `Couldn't compress below ${MAX_VIDEO_MB}MB. Try a shorter clip.`,
+        );
+        return;
+      }
+      setVideo(compressed);
+    } catch (err) {
+      console.error("Video compression failed:", err);
+      setVideoError("Video compression failed. Try a different file.");
+    } finally {
+      setCompressingVideo(false);
     }
   };
 
@@ -107,7 +132,6 @@ export default function NewProductPage() {
     setVideoError("");
   };
 
-  // Upload images to Sanity
   const uploadImagesToSanity = async (): Promise<any[]> => {
     if (images.length === 0) return [];
 
@@ -128,11 +152,8 @@ export default function NewProductPage() {
 
           uploaded.push({
             _type: "image",
-            _key: `img-${Date.now()}-${i}`, // array items need a _key
-            asset: {
-              _type: "reference",
-              _ref: asset._id,
-            },
+            _key: `img-${Date.now()}-${i}`,
+            asset: { _type: "reference", _ref: asset._id },
           });
 
           setUploadProgress(Math.round(((i + 1) / images.length) * 100));
@@ -148,7 +169,6 @@ export default function NewProductPage() {
     return uploaded;
   };
 
-  // Upload video to Sanity (optional)
   const uploadVideoToSanity = async (): Promise<any | null> => {
     if (!video) return null;
 
@@ -162,10 +182,7 @@ export default function NewProductPage() {
 
       return {
         _type: "file",
-        asset: {
-          _type: "reference",
-          _ref: asset._id,
-        },
+        asset: { _type: "reference", _ref: asset._id },
       };
     } catch (err) {
       console.error("Failed to upload video:", err);
@@ -180,14 +197,12 @@ export default function NewProductPage() {
     setLoading(true);
     setError("");
 
-    // Validate images before form submission
     if (images.length === 0) {
       setImageError("Please upload at least one image");
       setLoading(false);
       return;
     }
 
-    // Validate other fields
     if (!formData.orderNumber || formData.orderNumber <= 0) {
       setError("Order number must be greater than 0");
       setLoading(false);
@@ -213,11 +228,9 @@ export default function NewProductPage() {
     }
 
     try {
-      // Step 1: Upload images + optional video
       const uploadedImages = await uploadImagesToSanity();
       const uploadedVideo = await uploadVideoToSanity();
 
-      // Step 2: Fetch all products to find conflicts
       const allProducts = await sanityClient.fetch(`
         *[_type == "shoe"] | order(orderNumber asc) [0...100000] {
           _id,
@@ -225,24 +238,20 @@ export default function NewProductPage() {
         }
       `);
 
-      // Step 3: Find products that need to be shifted
       const productsToShift = allProducts.filter(
         (product: any) => product.orderNumber >= formData.orderNumber,
       );
 
-      // Step 4: Create transaction for all updates
       const transaction = sanityClient.transaction();
 
-      // Add shift operations in reverse order (to avoid conflicts)
       productsToShift
-        .sort((a: any, b: any) => b.orderNumber - a.orderNumber) // Sort descending
+        .sort((a: any, b: any) => b.orderNumber - a.orderNumber)
         .forEach((product: any) => {
           transaction.patch(product._id, {
             set: { orderNumber: product.orderNumber + 1 },
           });
         });
 
-      // Add create operation for new product (fields follow the "shoe" schema)
       transaction.create({
         _type: "shoe",
         orderNumber: formData.orderNumber,
@@ -263,13 +272,8 @@ export default function NewProductPage() {
         shoeBrand: "whitewalk",
       });
 
-      // Step 5: Commit the transaction
       await transaction.commit();
 
-      console.log(`✅ Created product at order ${formData.orderNumber}`);
-      console.log(`➡️  Shifted ${productsToShift.length} products forward`);
-
-      // Step 6: Redirect
       router.push("/admin");
       router.refresh();
     } catch (err: any) {
@@ -290,7 +294,12 @@ export default function NewProductPage() {
     }
   };
 
-  const busy = loading || uploadingImages || uploadingVideo;
+  const busy =
+    loading ||
+    uploadingImages ||
+    uploadingVideo ||
+    compressingImages ||
+    compressingVideo;
 
   return (
     <div className="space-y-6 p-4 md:max-w-4xl mx-auto">
@@ -319,7 +328,6 @@ export default function NewProductPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Order Number */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Order Number *
@@ -340,7 +348,6 @@ export default function NewProductPage() {
               />
             </div>
 
-            {/* Product Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Product Name *
@@ -357,7 +364,6 @@ export default function NewProductPage() {
               />
             </div>
 
-            {/* Price */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Price (₹) *
@@ -380,7 +386,7 @@ export default function NewProductPage() {
             </div>
           </div>
 
-          {/* Product Label Section */}
+          {/* Product Label */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Product Label
@@ -402,7 +408,7 @@ export default function NewProductPage() {
             </div>
           </div>
 
-          {/* Offers Section */}
+          {/* Offers */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Show in offers
@@ -426,7 +432,7 @@ export default function NewProductPage() {
             </div>
           </div>
 
-          {/* Image Upload Section */}
+          {/* Images */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Product Images *
@@ -436,19 +442,27 @@ export default function NewProductPage() {
               <p className="text-red-600 text-sm mb-2">{imageError}</p>
             )}
 
-            {/* Upload Area */}
             <div className="mt-1">
               <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed  rounded-lg p-8 text-center hover:border-blue-500 hover:bg-blue-50 transition cursor-pointer"
+                onClick={() => !busy && fileInputRef.current?.click()}
+                className="border-2 border-dashed rounded-lg p-8 text-center hover:border-blue-500 hover:bg-blue-50 transition cursor-pointer"
               >
-                <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">
-                  Click to upload images or drag and drop
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  PNG, JPG, GIF up to 10MB
-                </p>
+                {compressingImages ? (
+                  <>
+                    <Loader2 className="h-12 w-12 text-blue-600 mx-auto mb-4 animate-spin" />
+                    <p className="text-gray-600">Optimizing images...</p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">
+                      Click to upload images or drag and drop
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Any size. Auto-compressed to WebP
+                    </p>
+                  </>
+                )}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -460,14 +474,12 @@ export default function NewProductPage() {
               </div>
             </div>
 
-            {/* Image Preview */}
             {images.length > 0 && (
               <div className="mt-4">
                 <h3 className="text-sm font-medium text-gray-700 mb-3">
                   Selected Images ({images.length})
                 </h3>
 
-                {/* Upload Progress */}
                 {uploadingImages && (
                   <div className="mb-4">
                     <div className="flex justify-between text-sm mb-1">
@@ -487,6 +499,7 @@ export default function NewProductPage() {
                   {images.map((image, index) => (
                     <div key={index} className="relative group">
                       <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={URL.createObjectURL(image)}
                           alt={`Preview ${index + 1}`}
@@ -501,7 +514,7 @@ export default function NewProductPage() {
                         <X className="h-4 w-4" />
                       </button>
                       <p className="text-xs text-gray-500 mt-1 truncate">
-                        {image.name}
+                        {image.name} ({(image.size / 1024 / 1024).toFixed(1)}MB)
                       </p>
                     </div>
                   ))}
@@ -510,7 +523,7 @@ export default function NewProductPage() {
             )}
           </div>
 
-          {/* Video Upload Section (optional) */}
+          {/* Video (optional) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Product Video (optional)
@@ -520,7 +533,23 @@ export default function NewProductPage() {
               <p className="text-red-600 text-sm mb-2">{videoError}</p>
             )}
 
-            {!video ? (
+            {compressingVideo ? (
+              <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                <Loader2 className="h-10 w-10 text-blue-600 mx-auto mb-3 animate-spin" />
+                <p className="text-gray-600">
+                  Compressing video... {compressProgress}%
+                </p>
+                <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${compressProgress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Runs in your browser. Keep this tab open.
+                </p>
+              </div>
+            ) : !video ? (
               <div
                 onClick={() => videoInputRef.current?.click()}
                 className="border-2 border-dashed rounded-lg p-6 text-center hover:border-blue-500 hover:bg-blue-50 transition cursor-pointer"
@@ -528,12 +557,13 @@ export default function NewProductPage() {
                 <Video className="h-10 w-10 text-gray-400 mx-auto mb-3" />
                 <p className="text-gray-600">Click to upload a video</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  MP4 or WebM up to {MAX_VIDEO_MB}MB
+                  Any video up to {MAX_INPUT_VIDEO_MB}MB. Auto-compressed to
+                  under {MAX_VIDEO_MB}MB
                 </p>
                 <input
                   ref={videoInputRef}
                   type="file"
-                  accept="video/mp4,video/webm"
+                  accept="video/*"
                   onChange={handleVideoSelect}
                   className="hidden"
                 />
@@ -581,9 +611,11 @@ export default function NewProductPage() {
               {busy ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  {uploadingImages || uploadingVideo
-                    ? "Uploading..."
-                    : "Creating..."}
+                  {compressingImages || compressingVideo
+                    ? "Compressing..."
+                    : uploadingImages || uploadingVideo
+                      ? "Uploading..."
+                      : "Creating..."}
                 </>
               ) : (
                 "Create Product"

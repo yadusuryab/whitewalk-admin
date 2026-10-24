@@ -20,8 +20,10 @@ import {
   Upload,
   Loader2,
   Check,
+  Video as VideoIcon,
 } from "lucide-react";
 import { client as sanityClient } from "@/lib/sanity";
+import { compressImage, compressVideo } from "@/lib/compress";
 
 const display = Inter_Tight({
   subsets: ["latin"],
@@ -44,6 +46,8 @@ const OFFER_OPTIONS = [
 ] as const;
 
 const DEFAULT_SIZES = [6, 7, 8, 9, 10];
+const MAX_INPUT_VIDEO_MB = 300; // largest raw file we'll try to compress
+const TARGET_VIDEO_MB = 4; // Vercel caps request bodies at ~4.5MB
 
 interface Shoe {
   _id: string;
@@ -59,6 +63,8 @@ interface Shoe {
   offer1Pair?: boolean;
   offer2Pair?: boolean;
   offer3Pair?: boolean;
+  videoUrl?: string;
+  posterUrl?: string;
 }
 
 type StatusFilter = "all" | "active" | "disabled";
@@ -232,7 +238,20 @@ export default function ProductsPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [compressingImage, setCompressingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Video state
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [posterFile, setPosterFile] = useState<File | null>(null);
+  const [posterPreview, setPosterPreview] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [compressingVideo, setCompressingVideo] = useState(false);
+  const [compressProgress, setCompressProgress] = useState(0);
+  const [videoError, setVideoError] = useState("");
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const posterInputRef = useRef<HTMLInputElement>(null);
 
   // Check screen size for responsive design
   useEffect(() => {
@@ -248,8 +267,6 @@ export default function ProductsPage() {
 
   const fetchProducts = useCallback(async () => {
     try {
-      // Fetch count first so we know the exact ceiling, then fetch all docs.
-      // Running them in parallel would race — the docs query needs the count.
       const count = await sanityClient.fetch<number>(`count(*[_type == "shoe"])`);
       setTotalCount(count);
 
@@ -267,7 +284,9 @@ export default function ProductsPage() {
           disabledSizes,
           offer1Pair,
           offer2Pair,
-          offer3Pair
+          offer3Pair,
+          "videoUrl": video.asset->url,
+          "posterUrl": videoPoster.asset->url
         }`,
       );
       setShoes(data);
@@ -371,7 +390,6 @@ export default function ProductsPage() {
             shoe._id === id ? { ...shoe, isDisabled: !currentStatus } : shoe,
           ),
         );
-        // Keep the open modal in sync
         setEditingProduct((prev) =>
           prev && prev._id === id
             ? { ...prev, isDisabled: !currentStatus }
@@ -398,6 +416,25 @@ export default function ProductsPage() {
     }
   }, []);
 
+  /* ---------- Media helpers ---------- */
+
+  const clearImageSelection = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const clearVideoSelection = () => {
+    setVideoFile(null);
+    setVideoPreview(null);
+    setPosterFile(null);
+    setPosterPreview(null);
+    setVideoError("");
+    setCompressProgress(0);
+    if (videoInputRef.current) videoInputRef.current.value = "";
+    if (posterInputRef.current) posterInputRef.current.value = "";
+  };
+
   // Edit product
   const startEdit = (product: Shoe) => {
     setEditingProduct(product);
@@ -411,15 +448,14 @@ export default function ProductsPage() {
       offer2Pair: product.offer2Pair ?? false,
       offer3Pair: product.offer3Pair ?? false,
     });
-    setImageFile(null);
-    setImagePreview(null);
+    clearImageSelection();
+    clearVideoSelection();
   };
 
   const closeEdit = () => {
     setEditingProduct(null);
-    setImageFile(null);
-    setImagePreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    clearImageSelection();
+    clearVideoSelection();
   };
 
   const toggleEditLabel = (value: string) => {
@@ -444,30 +480,110 @@ export default function ProductsPage() {
     setEditForm((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Handle image file selection
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image select (auto-compressed)
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
 
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/avif"];
-    if (!allowedTypes.includes(file.type)) {
-      alert("Invalid file type. Only JPEG, PNG, WebP, and AVIF are allowed.");
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert("File too large. Maximum size is 10MB.");
-      return;
+    setCompressingImage(true);
+    try {
+      const compressed = await compressImage(file);
+      setImageFile(compressed);
+      setImagePreview(URL.createObjectURL(compressed));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to process image.");
+    } finally {
+      setCompressingImage(false);
     }
-
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
   };
 
-  const clearImageSelection = () => {
-    setImageFile(null);
-    setImagePreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  // Video select (auto-compressed to TARGET_VIDEO_MB)
+  const handleVideoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (videoInputRef.current) videoInputRef.current.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("video/")) {
+      setVideoError("Please select a video file");
+      return;
+    }
+    if (file.size > MAX_INPUT_VIDEO_MB * 1024 * 1024) {
+      setVideoError(`Video must be under ${MAX_INPUT_VIDEO_MB}MB`);
+      return;
+    }
+
+    setVideoError("");
+    setCompressingVideo(true);
+    setCompressProgress(0);
+    try {
+      const compressed = await compressVideo(
+        file,
+        TARGET_VIDEO_MB,
+        setCompressProgress,
+      );
+      if (compressed.size > TARGET_VIDEO_MB * 1024 * 1024) {
+        setVideoError(
+          `Couldn't compress below ${TARGET_VIDEO_MB}MB. Try a shorter clip.`,
+        );
+        return;
+      }
+      setVideoFile(compressed);
+      setVideoPreview(URL.createObjectURL(compressed));
+    } catch (err) {
+      console.error("Video compression failed:", err);
+      setVideoError("Video compression failed. Try a different file.");
+    } finally {
+      setCompressingVideo(false);
+    }
+  };
+
+  const handlePosterSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (posterInputRef.current) posterInputRef.current.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setVideoError("Poster must be an image");
+      return;
+    }
+    try {
+      const compressed = await compressImage(file, 1280, 0.8);
+      setPosterFile(compressed);
+      setPosterPreview(URL.createObjectURL(compressed));
+      setVideoError("");
+    } catch {
+      setVideoError("Failed to process poster");
+    }
+  };
+
+  const removeVideo = async () => {
+    if (!editingProduct || !confirm("Remove this video?")) return;
+    try {
+      const res = await fetch(`/api/products/${editingProduct._id}/video`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const p = await res.json().catch(() => ({}));
+        throw new Error(p.error || "Failed to remove video");
+      }
+      const cleared = { videoUrl: undefined, posterUrl: undefined };
+      setShoes((prev) =>
+        prev.map((s) =>
+          s._id === editingProduct._id ? { ...s, ...cleared } : s,
+        ),
+      );
+      setEditingProduct((prev) => (prev ? { ...prev, ...cleared } : prev));
+      clearVideoSelection();
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   const saveEdit = async () => {
@@ -486,7 +602,6 @@ export default function ProductsPage() {
           body: formData,
         });
 
-        // Guard against HTML error pages (404, 500, etc.)
         const contentType = res.headers.get("content-type") ?? "";
         if (!contentType.includes("application/json")) {
           throw new Error(
@@ -518,9 +633,45 @@ export default function ProductsPage() {
         setUploadingImage(false);
       }
 
+      // Upload video / poster if selected
+      if (videoFile || posterFile) {
+        setUploadingVideo(true);
+
+        const fd = new FormData();
+        if (videoFile) fd.append("video", videoFile);
+        if (posterFile) fd.append("poster", posterFile);
+
+        const res = await fetch(`/api/products/${editingProduct._id}/video`, {
+          method: "PUT",
+          body: fd,
+        });
+
+        const contentType = res.headers.get("content-type") ?? "";
+        if (!contentType.includes("application/json")) {
+          throw new Error(
+            `Video upload failed (HTTP ${res.status}). File may exceed the server body limit.`,
+          );
+        }
+
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error || "Video upload failed");
+
+        setShoes((prev) =>
+          prev.map((s) =>
+            s._id === editingProduct._id
+              ? {
+                  ...s,
+                  ...(payload.videoUrl && { videoUrl: payload.videoUrl }),
+                  ...(payload.posterUrl && { posterUrl: payload.posterUrl }),
+                }
+              : s,
+          ),
+        );
+
+        setUploadingVideo(false);
+      }
+
       const oldOrderNumber = editingProduct.orderNumber;
-      // Clamp to [1, totalCount] — totalCount comes from Sanity directly,
-      // so it's always correct even if shoes[] only partially loaded.
       const finalOrderNumber = Math.max(
         1,
         Math.min(editForm.orderNumber, totalCount),
@@ -530,17 +681,12 @@ export default function ProductsPage() {
       if (orderChanged) {
         setReorderSaving(true);
 
-        // Fetch ALL product IDs + orderNumbers straight from Sanity.
-        // We cannot use the local shoes[] array for reordering because Sanity
-        // silently caps fetches — shoes[] may only contain a subset of products,
-        // which causes splice-based reordering to cap at the wrong maximum.
         const allShoes = await sanityClient.fetch<
           { _id: string; orderNumber: number }[]
         >(
           `*[_type == "shoe"] | order(orderNumber asc) [0...${totalCount + 100}] { _id, orderNumber }`,
         );
 
-        // Remove the edited shoe, insert at the target position, re-sequence.
         const withoutEdited = allShoes.filter(
           (s) => s._id !== editingProduct._id,
         );
@@ -553,13 +699,11 @@ export default function ProductsPage() {
           orderNumber: idx + 1,
         }));
 
-        // Only patch docs whose orderNumber actually changed
         const changed = reordered.filter((s) => {
           const orig = allShoes.find((o) => o._id === s._id);
           return orig && orig.orderNumber !== s.orderNumber;
         });
 
-        // Batch in groups of 50 to avoid rate-limiting Sanity
         const BATCH = 50;
         for (let i = 0; i < changed.length; i += BATCH) {
           await Promise.all(
@@ -574,7 +718,6 @@ export default function ProductsPage() {
           );
         }
 
-        // Update local state order numbers for docs we have in memory
         setShoes((prev) => {
           const orderMap = new Map(
             reordered.map((s) => [s._id, s.orderNumber]),
@@ -590,7 +733,6 @@ export default function ProductsPage() {
         setReorderSaving(false);
       }
 
-      // Patch name + price + label + sizes + offers + final order number for the edited shoe
       await sanityClient
         .patch(editingProduct._id)
         .set({
@@ -630,6 +772,7 @@ export default function ProductsPage() {
       console.error("Error updating product:", error);
       alert(error.message || "Failed to update product");
       setUploadingImage(false);
+      setUploadingVideo(false);
       setReorderSaving(false);
     }
   };
@@ -662,6 +805,15 @@ export default function ProductsPage() {
       (s) =>
         s.orderNumber === editForm.orderNumber && s._id !== editingProduct._id,
     );
+
+  const saving =
+    uploadingImage ||
+    uploadingVideo ||
+    reorderSaving ||
+    compressingImage ||
+    compressingVideo;
+
+  const currentVideoSrc = videoPreview || editingProduct?.videoUrl;
 
   return (
     <div
@@ -778,14 +930,20 @@ export default function ProductsPage() {
                   <label className={labelCls}>Product image</label>
 
                   <div className="relative mx-auto mb-3 aspect-square w-full max-w-[200px] overflow-hidden rounded-[1.5rem] bg-neutral-100">
-                    {imagePreview ? (
+                    {compressingImage ? (
+                      <div className="flex h-full flex-col items-center justify-center gap-2 text-neutral-500">
+                        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                        <span className="text-xs font-semibold">
+                          Optimizing…
+                        </span>
+                      </div>
+                    ) : imagePreview ? (
                       <>
-                        <Image
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
                           src={imagePreview}
                           alt="New image preview"
-                          fill
-                          sizes="200px"
-                          className="object-cover duration-500 animate-in fade-in zoom-in-95"
+                          className="h-full w-full object-cover duration-500 animate-in fade-in zoom-in-95"
                         />
                         <button
                           type="button"
@@ -819,7 +977,7 @@ export default function ProductsPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    accept="image/*"
                     onChange={handleImageSelect}
                     className="hidden"
                     id="image-replace-input"
@@ -828,12 +986,122 @@ export default function ProductsPage() {
                   <Btn
                     onClick={() => fileInputRef.current?.click()}
                     className="w-full"
+                    disabled={compressingImage}
                   >
                     <Upload className="h-4 w-4" />
                     {imageFile ? "Change selected image" : "Replace image"}
                   </Btn>
                   <p className="mt-2 text-center text-xs font-medium text-neutral-400">
-                    JPEG, PNG, WebP or AVIF · Max 10MB
+                    Any size · Auto-compressed to WebP
+                  </p>
+                </div>
+
+                {/* Product Video */}
+                <div className="mb-6">
+                  <label className={labelCls}>
+                    Product video{" "}
+                    <span className="font-medium text-neutral-400">
+                      (optional)
+                    </span>
+                  </label>
+
+                  {compressingVideo ? (
+                    <div className="mb-3 rounded-[1.5rem] bg-neutral-100 p-5 text-center">
+                      <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-blue-600" />
+                      <p className="text-sm font-semibold">
+                        Compressing… {compressProgress}%
+                      </p>
+                      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+                        <div
+                          className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                          style={{ width: `${compressProgress}%` }}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs font-medium text-neutral-400">
+                        Runs in your browser. Keep this tab open.
+                      </p>
+                    </div>
+                  ) : (
+                    currentVideoSrc && (
+                      <video
+                        key={currentVideoSrc}
+                        src={currentVideoSrc}
+                        poster={posterPreview || editingProduct.posterUrl}
+                        controls
+                        muted
+                        playsInline
+                        className="mb-3 aspect-video w-full rounded-[1.5rem] bg-neutral-100 object-cover"
+                      />
+                    )
+                  )}
+
+                  {videoError && (
+                    <p className="mb-2 text-xs font-semibold text-red-500">
+                      {videoError}
+                    </p>
+                  )}
+
+                  <input
+                    ref={videoInputRef}
+                    type="file"
+                    accept="video/*"
+                    onChange={handleVideoSelect}
+                    className="hidden"
+                  />
+                  <input
+                    ref={posterInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePosterSelect}
+                    className="hidden"
+                  />
+
+                  <div className="flex flex-wrap gap-2">
+                    <Btn
+                      onClick={() => videoInputRef.current?.click()}
+                      className="flex-1"
+                      disabled={compressingVideo}
+                    >
+                      <VideoIcon className="h-4 w-4" />
+                      {videoFile
+                        ? "Change video"
+                        : editingProduct.videoUrl
+                          ? "Replace video"
+                          : "Upload video"}
+                    </Btn>
+                    {currentVideoSrc && !compressingVideo && (
+                      <Btn
+                        onClick={() => posterInputRef.current?.click()}
+                        className="flex-1"
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                        {posterFile ? "Change poster" : "Poster"}
+                      </Btn>
+                    )}
+                    {editingProduct.videoUrl && (
+                      <Btn
+                        onClick={removeVideo}
+                        icon
+                        variant="danger"
+                        title="Remove video"
+                        disabled={compressingVideo}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Btn>
+                    )}
+                  </div>
+
+                  {(videoFile || posterFile) && (
+                    <p className="mt-2 text-center text-xs font-semibold text-blue-700">
+                      {videoFile
+                        ? `${(videoFile.size / 1024 / 1024).toFixed(1)}MB ready · `
+                        : ""}
+                      saved with &quot;Save changes&quot;
+                    </p>
+                  )}
+                  <p className="mt-2 text-center text-xs font-medium text-neutral-400">
+                    Any video up to {MAX_INPUT_VIDEO_MB}MB · Auto-compressed to
+                    under {TARGET_VIDEO_MB}MB
                   </p>
                 </div>
 
@@ -859,12 +1127,10 @@ export default function ProductsPage() {
                         min={1}
                         value={editForm.orderNumber}
                         onChange={(e) => {
-                          // Allow free typing — do NOT clamp here so mid-type values work
                           const raw = parseInt(e.target.value) || 1;
                           setEditForm({ ...editForm, orderNumber: raw });
                         }}
                         onBlur={(e) => {
-                          // Clamp only when the user leaves the field
                           const raw = parseInt(e.target.value) || 1;
                           const clamped = Math.max(
                             1,
@@ -984,15 +1250,16 @@ export default function ProductsPage() {
 
                 <div className="mt-6 flex justify-end gap-2 border-t border-neutral-200 pt-5">
                   <Btn onClick={closeEdit}>Cancel</Btn>
-                  <Btn
-                    onClick={saveEdit}
-                    variant="primary"
-                    disabled={uploadingImage || reorderSaving}
-                  >
-                    {uploadingImage ? (
+                  <Btn onClick={saveEdit} variant="primary" disabled={saving}>
+                    {uploadingImage || uploadingVideo ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Uploading…
+                      </>
+                    ) : compressingImage || compressingVideo ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Compressing…
                       </>
                     ) : reorderSaving ? (
                       <>
@@ -1067,6 +1334,11 @@ export default function ProductsPage() {
                           </div>
                         )}
                         <OfferChips shoe={shoe} />
+                        {shoe.videoUrl && (
+                          <div className="mt-1.5">
+                            <Tag blue>Video</Tag>
+                          </div>
+                        )}
                         {!!shoe.disabledSizes?.length && (
                           <p className="mt-1.5 text-[11px] font-semibold text-red-500">
                             Sizes off: {shoe.disabledSizes.join(", ")}
@@ -1116,6 +1388,7 @@ export default function ProductsPage() {
                       "Price",
                       "Label",
                       "Offers",
+                      "Video",
                       "Sizes off",
                       "Status",
                       "Actions",
@@ -1191,6 +1464,14 @@ export default function ProductsPage() {
 
                         <td className="px-4 py-3">
                           <OfferChips shoe={shoe} />
+                        </td>
+
+                        <td className="whitespace-nowrap px-4 py-3 text-sm">
+                          {shoe.videoUrl ? (
+                            <VideoIcon className="h-4 w-4 text-blue-600" />
+                          ) : (
+                            <span className="text-neutral-300">—</span>
+                          )}
                         </td>
 
                         <td className="whitespace-nowrap px-4 py-3 text-sm">
