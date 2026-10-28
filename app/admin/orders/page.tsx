@@ -1679,7 +1679,7 @@ export default function OrdersPage() {
 
       {/* Bulk action bar */}
       {bulkOn && (
-        <div className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-[1.75rem] bg-neutral-950 p-3 pl-5 text-white duration-300 animate-in fade-in slide-in-from-bottom-4 md:inset-x-8">
+        <div className="fixed inset-x-3 bottom-20 z-50 mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-[1.75rem] bg-neutral-950 p-3 pl-5 text-white duration-300 animate-in fade-in slide-in-from-bottom-4 md:inset-x-8">
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm font-extrabold tracking-tight">
               {selectedIds.size} selected
