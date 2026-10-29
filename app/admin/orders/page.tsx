@@ -330,8 +330,9 @@ export default function OrdersPage() {
         </Btn>
       </PageHead>
 
-      <div className="mt-8 flex flex-col gap-3">
-        <div className="flex flex-wrap gap-2">
+      <div className="mt-5 flex flex-col gap-3 sm:mt-8">
+        {/* Chips scroll sideways on phones instead of wrapping into 3 rows */}
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 [&>*]:whitespace-nowrap">
           <Chip active={tab === "orders"} onClick={() => switchTab("orders")}>
             Orders <span className="opacity-60">{paidCount}</span>
           </Chip>
@@ -355,14 +356,15 @@ export default function OrdersPage() {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Order ID, customer, phone, UTR or tracking ID…  ( / )"
+          placeholder="Order ID, name, phone, UTR, tracking…"
         />
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between">
           <p className="text-sm font-semibold text-neutral-500">
             {filtered.length} of {tab === "abandoned" ? abandonedCount : paidCount}
           </p>
-          <div className="flex flex-wrap items-center gap-2">
+          {/* 2-column grid on phones, free-flowing row from sm up */}
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center [&>*]:min-w-0 [&_select]:w-full sm:[&_select]:w-auto">
             <Select label="Method" value={method} onChange={setMethod} options={METHODS} />
             <Select label="Date" value={preset} onChange={setPreset} options={DATES} />
             {preset === "custom" && (
@@ -373,7 +375,7 @@ export default function OrdersPage() {
                   value={from}
                   max={to || undefined}
                   onChange={(e) => setFrom(e.target.value)}
-                  className={selectCls}
+                  className={`${selectCls} w-full sm:w-auto`}
                 />
                 <input
                   type="date"
@@ -381,7 +383,7 @@ export default function OrdersPage() {
                   value={to}
                   min={from || undefined}
                   onChange={(e) => setTo(e.target.value)}
-                  className={selectCls}
+                  className={`${selectCls} w-full sm:w-auto`}
                 />
               </>
             )}
@@ -396,7 +398,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="mt-6 space-y-2">
+      <div className="mt-4 space-y-2 sm:mt-6">
         {!data && !error && <Skeleton />}
         {!data && error && (
           <Empty text="Couldn't load orders." action="Retry" onAction={refetch} />
@@ -416,44 +418,55 @@ export default function OrdersPage() {
 
         {rows.map((o) => (
           <Row key={o._id} active={picked.has(o._id)} onClick={() => setOpenId(o._id)}>
-            {tab === "orders" && (
-              <input
-                type="checkbox"
-                className={checkCls}
-                aria-label={`Select ${o.orderId}`}
-                checked={picked.has(o._id)}
-                onClick={(e) => e.stopPropagation()}
-                onChange={() => toggleOne(o._id)}
-              />
-            )}
-            <Thumb src={o.items?.[0]?.imageUrl} />
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
-                {o.orderId} · {fmtDate(o.createdAt)}
-              </p>
-              <p className="truncate font-extrabold tracking-tight">{o.customerName}</p>
-              <div className="mt-1 flex flex-wrap gap-1">
-                <MethodTag method={o.shippingMethod} />
-                <Addons order={o} />
+            {/* Phone: info on top, badges/actions underneath. sm+: single line. */}
+            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                {tab === "orders" && (
+                  <input
+                    type="checkbox"
+                    className={`${checkCls} shrink-0`}
+                    aria-label={`Select ${o.orderId}`}
+                    checked={picked.has(o._id)}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => toggleOne(o._id)}
+                  />
+                )}
+                <div className="shrink-0">
+                  <Thumb src={o.items?.[0]?.imageUrl} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-400 sm:text-[11px]">
+                    {o.orderId} · {fmtDate(o.createdAt)}
+                  </p>
+                  <p className="truncate font-extrabold tracking-tight">{o.customerName}</p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <MethodTag method={o.shippingMethod} />
+                    <Addons order={o} />
+                  </div>
+                </div>
+                <p className="shrink-0 text-lg font-extrabold tracking-tight sm:text-xl">
+                  ₹{o.totalAmount}
+                </p>
+              </div>
+              <div className="w-full sm:w-auto sm:shrink-0">
+                <Actions>
+                  {isAbandoned(o) ? (
+                    <>
+                      <PayBadge status={o.paymentStatus} />
+                      <WaButton order={o} />
+                    </>
+                  ) : (
+                    <>
+                      <StatusBadge status={o.fulfillmentStatus} />
+                      {o.paymentStatus !== "paid" && <PayBadge status={o.paymentStatus} />}
+                    </>
+                  )}
+                  <Btn icon variant="danger" title="Delete order" onClick={() => remove(o)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Btn>
+                </Actions>
               </div>
             </div>
-            <p className="text-xl font-extrabold tracking-tight">₹{o.totalAmount}</p>
-            <Actions>
-              {isAbandoned(o) ? (
-                <>
-                  <PayBadge status={o.paymentStatus} />
-                  <WaButton order={o} />
-                </>
-              ) : (
-                <>
-                  <StatusBadge status={o.fulfillmentStatus} />
-                  {o.paymentStatus !== "paid" && <PayBadge status={o.paymentStatus} />}
-                </>
-              )}
-              <Btn icon variant="danger" title="Delete order" onClick={() => remove(o)}>
-                <Trash2 className="h-4 w-4" />
-              </Btn>
-            </Actions>
           </Row>
         ))}
 
@@ -466,6 +479,9 @@ export default function OrdersPage() {
       </div>
 
       <Pager page={page} pages={pages} onPage={setPage} />
+
+      {/* Keeps the last rows and pager clear of the floating bulk bar */}
+      {bulkOn && <div aria-hidden className="h-32 sm:h-24" />}
 
       {open && (
         <OrderModal
@@ -480,22 +496,22 @@ export default function OrdersPage() {
       )}
 
       {bulkOn && (
-        <div className="fixed inset-x-3 bottom-6 z-40 mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-[1.75rem] bg-neutral-950 p-3 pl-5 text-white shadow-2xl duration-200 animate-in fade-in slide-in-from-bottom-4">
-          <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
+        <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-3xl flex-col gap-3 rounded-3xl bg-neutral-950 p-3 text-white shadow-2xl duration-200 animate-in fade-in slide-in-from-bottom-4 sm:bottom-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:rounded-[1.75rem] sm:p-3 sm:pl-5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs font-semibold sm:px-0">
             <span className="text-sm font-extrabold tracking-tight">
               {picked.size} selected
             </span>
             {picked.size < filtered.length && (
               <button
                 onClick={() => setPicked(new Set(filtered.map((o) => o._id)))}
-                className="text-blue-400"
+                className="py-1 text-blue-400"
               >
                 Select all {filtered.length}
               </button>
             )}
             <button
               onClick={() => setPicked(new Set())}
-              className="text-white/60 hover:text-white"
+              className="py-1 text-white/60 hover:text-white"
             >
               Clear
             </button>
@@ -505,7 +521,7 @@ export default function OrdersPage() {
               value={bulk}
               onChange={(e) => setBulk(e.target.value as Fulfillment)}
               aria-label="Bulk fulfillment status"
-              className="h-10 cursor-pointer rounded-full bg-white/10 px-4 text-xs font-extrabold text-white outline-none focus:ring-2 focus:ring-white [&>option]:text-neutral-950"
+              className="h-10 min-w-0 flex-1 cursor-pointer rounded-full bg-white/10 px-4 text-xs font-extrabold text-white outline-none focus:ring-2 focus:ring-white sm:flex-none [&>option]:text-neutral-950"
             >
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -516,7 +532,7 @@ export default function OrdersPage() {
             <Btn
               onClick={applyBulk}
               loading={bulkBusy}
-              className="!bg-white !text-neutral-950 hover:!bg-blue-600 hover:!text-white"
+              className="shrink-0 !bg-white !text-neutral-950 hover:!bg-blue-600 hover:!text-white"
             >
               Apply
             </Btn>
