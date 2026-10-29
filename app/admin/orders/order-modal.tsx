@@ -27,6 +27,7 @@ import {
   WaButton,
   cap,
   fmtDateTime,
+  hasVirtualThird,
   isAbandoned,
   type Order,
 } from "./shared";
@@ -102,7 +103,12 @@ export default function OrderModal({
   };
 
   const copyAddress = async () => {
-    const sizes = order.items.map((it, i) => `SIZE PAIR ${i + 1}= ${it.size}`).join("\n");
+    const sizes = [
+      ...order.items.map((it, i) => `SIZE PAIR ${i + 1}= ${it.size}`),
+      ...(hasVirtualThird(order)
+        ? [`SIZE PAIR 3= ${order.randomThirdSize} (RANDOM)`]
+        : []),
+    ].join("\n");
     const collect = order.remainingAmount ?? Math.max(0, order.totalAmount - COD_ADVANCE);
     const advance = order.advancePaid ?? COD_ADVANCE;
     const text = `NAME : ${order.customerName}
@@ -141,7 +147,9 @@ SHOE CLEANER : ${order.shoeCleanerAddon ? "YES" : "NO"}
       ? "Manual UPI"
       : order.paymentMethod === "razorpay"
         ? "Razorpay"
-        : "—";
+        : order.paymentMethod === "cod"
+          ? "COD"
+          : "—";
 
   return (
     <Modal wide onClose={onClose}>
@@ -195,6 +203,24 @@ SHOE CLEANER : ${order.shoeCleanerAddon ? "YES" : "NO"}
               </div>
             </div>
           ))}
+
+          {/* 3rd random pair for orders saved without a 3rd item */}
+          {hasVirtualThird(order) && (
+            <div className="flex items-center gap-3 text-sm">
+              <Thumb src={undefined} className="h-14 w-14" />
+              <div className="flex flex-1 items-center justify-between gap-2">
+                <span className="font-extrabold leading-tight tracking-tight">
+                  Random pair (warehouse picks)
+                  <span className="block text-xs font-semibold text-neutral-500">
+                    Size {order.randomThirdSize}
+                    <span className="ml-2 text-green-700">Free</span>
+                  </span>
+                </span>
+                <span className="whitespace-nowrap font-extrabold tracking-tight">₹0</span>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-baseline justify-between border-t border-neutral-200 pt-3">
             <span className="text-sm font-semibold text-neutral-500">Total</span>
             <span className="text-4xl font-extrabold leading-none tracking-[-0.045em]">

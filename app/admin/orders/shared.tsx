@@ -39,6 +39,7 @@ export interface Order {
   _id: string;
   orderId: string;
   pairCount?: number;
+  randomThirdSize?: number;
   items: OrderItem[];
   customerName: string;
   instagramId?: string;
@@ -54,11 +55,12 @@ export interface Order {
   freeSocksOffer: boolean;
   subtotal: number;
   shippingCharge: number;
+  codCharge?: number;
   totalAmount: number;
   advancePaid?: number;
   remainingAmount?: number;
   expectedDeliveryLabel: string;
-  paymentMethod?: "manual_upi" | "razorpay";
+  paymentMethod?: "manual_upi" | "razorpay" | "cod";
   paymentScreenshotUrl?: string | null;
   utr?: string;
   razorpayOrderId?: string;
@@ -76,6 +78,7 @@ export type MethodFilter = "all" | Order["shippingMethod"];
 
 // Image fields are Sanity objects, so resolve them to CDN URLs here.
 // "auto=format" is also what copyImage() swaps for "fm=png".
+// `...` already includes randomThirdSize.
 export const QUERY = `*[_type == "order"] | order(createdAt desc) {
   ...,
   "paymentScreenshotUrl": paymentScreenshot.asset->url,
@@ -125,6 +128,11 @@ export const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 export const isAbandoned = (o: Order) =>
   o.paymentStatus === "pending" || o.paymentStatus === "failed";
 
+// True when the 3rd (random) pair exists only as randomThirdSize,
+// not as an item. Covers orders saved before the items.push fix.
+export const hasVirtualThird = (o: Order) =>
+  o.pairCount === 3 && (o.items?.length ?? 0) < 3 && o.randomThirdSize != null;
+
 export const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString("en-IN", {
     day: "numeric",
@@ -147,16 +155,20 @@ export const looksLikePhone = (s: string) =>
 
 export const waLink = (o: Order) => {
   const name = o.customerName?.split(" ")[0] || "there";
-  const lines = (o.items || [])
-    .map((it, i) => {
-      const price = it.isFreeItem ? "FREE" : `₹${it.price}`;
-      // Schema has no slug, so this uses the product id. Match your route.
-      const url = it.productId
-        ? `\n   🔗 https://whitewalk.in/product/${it.productId}`
-        : "";
-      return `${i + 1}. ${it.productName} (Size ${it.size}) - ${price}${url}`;
-    })
-    .join("\n");
+  const itemLines = (o.items || []).map((it, i) => {
+    const price = it.isFreeItem ? "FREE" : `₹${it.price}`;
+    // Schema has no slug, so this uses the product id. Match your route.
+    const url = it.productId
+      ? `\n   🔗 https://whitewalk.in/product/${it.productId}`
+      : "";
+    return `${i + 1}. ${it.productName} (Size ${it.size}) - ${price}${url}`;
+  });
+  if (hasVirtualThird(o)) {
+    itemLines.push(
+      `${itemLines.length + 1}. Surprise pair (Size ${o.randomThirdSize}) - FREE`,
+    );
+  }
+  const lines = itemLines.join("\n");
   const msg = `Hi ${name}! 👋
 Saw you were ordering:
 ${lines}
