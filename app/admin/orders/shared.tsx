@@ -126,8 +126,8 @@ export const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 // "verifying" and "rejected" are real (UPI) orders, so they stay in Orders.
 export const isAbandoned = (o: Order) =>
-  o.paymentStatus === "pending" || o.paymentStatus === "failed";
-
+  o.shippingMethod !== "cod" &&
+  (o.paymentStatus === "pending" || o.paymentStatus === "failed");
 // True when the 3rd (random) pair exists only as randomThirdSize,
 // not as an item. Covers orders saved before the items.push fix.
 export const hasVirtualThird = (o: Order) =>
