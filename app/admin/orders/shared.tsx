@@ -125,8 +125,11 @@ export const PAY_STATUSES = Object.keys(PAY_LABEL) as PaymentStatus[];
 export const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 // "verifying" and "rejected" are real (UPI) orders, so they stay in Orders.
+// COD takes no advance, so COD orders are never abandoned carts.
 export const isAbandoned = (o: Order) =>
+  o.shippingMethod !== "cod" &&
   (o.paymentStatus === "pending" || o.paymentStatus === "failed");
+
 // True when the 3rd (random) pair exists only as randomThirdSize,
 // not as an item. Covers orders saved before the items.push fix.
 export const hasVirtualThird = (o: Order) =>
@@ -181,6 +184,20 @@ Stock is limited!
   return `https://wa.me/91${normPhone(o.contact1)}?text=${encodeURIComponent(msg)}`;
 };
 
+// COD -> prepaid conversion message.
+export const waPrepaidLink = (o: Order) => {
+  const name = o.customerName?.split(" ")[0] || "there";
+  const save = o.codCharge
+    ? `\n💸 Pay online and save the ₹${o.codCharge} COD charge.`
+    : "";
+  const msg = `Hi ${name}! 👋
+Your order ${o.orderId} (₹${o.totalAmount}) is placed as Cash on Delivery.${save}
+⚡ Prepaid orders are packed and shipped first.
+
+Want to switch to prepaid? Reply "YES" and we'll send the UPI details right away.`;
+  return `https://wa.me/91${normPhone(o.contact1)}?text=${encodeURIComponent(msg)}`;
+};
+
 /* ---------- badges ---------- */
 
 export const StatusBadge = ({ status }: { status: Fulfillment }) => {
@@ -229,5 +246,18 @@ export const WaButton = ({ order }: { order: Order }) => (
     className="inline-flex h-8 items-center gap-1.5 rounded-full bg-green-50 px-3 text-xs font-extrabold tracking-tight text-green-700 transition-all hover:bg-green-100 active:scale-95"
   >
     <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+  </a>
+);
+
+export const WaPrepaidButton = ({ order }: { order: Order }) => (
+  <a
+    href={waPrepaidLink(order)}
+    target="_blank"
+    rel="noreferrer"
+    onClick={(e) => e.stopPropagation()}
+    title="Ask to switch to prepaid"
+    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full bg-green-50 px-3 text-xs font-extrabold tracking-tight text-green-700 transition-all hover:bg-green-100 active:scale-95"
+  >
+    <MessageCircle className="h-3.5 w-3.5" /> Convert to prepaid
   </a>
 );

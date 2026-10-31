@@ -34,6 +34,7 @@ import {
   STATUSES,
   StatusBadge,
   WaButton,
+  WaPrepaidButton,
   cap,
   fmtDate,
   isAbandoned,
@@ -459,6 +460,11 @@ export default function OrdersPage() {
                     <>
                       <StatusBadge status={o.fulfillmentStatus} />
                       {o.paymentStatus !== "paid" && <PayBadge status={o.paymentStatus} />}
+                      {o.shippingMethod === "cod" &&
+                        o.paymentStatus !== "paid" &&
+                        ["pending", "processing"].includes(o.fulfillmentStatus) && (
+                          <WaPrepaidButton order={o} />
+                        )}
                     </>
                   )}
                   <Btn icon variant="danger" title="Delete order" onClick={() => remove(o)}>
