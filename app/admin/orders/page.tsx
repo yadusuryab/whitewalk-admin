@@ -4,7 +4,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, BellOff, Trash2 } from "lucide-react";
+import { AlertTriangle, Bell, BellOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { client } from "@/lib/sanity";
 import { undoable, useDebounced, usePaged, useQuery } from "@/lib/admin-data";
@@ -104,6 +104,69 @@ function range(p: DatePreset, from: string, to: string): [number | null, number 
   }
 }
 
+/* ---------- delete confirmation ---------- */
+
+function ConfirmDelete({
+  order,
+  onCancel,
+  onConfirm,
+}: {
+  order: Order;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCancel();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-3 duration-150 animate-in fade-in sm:items-center"
+      onClick={onCancel}
+      role="presentation"
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="del-title"
+        aria-describedby="del-desc"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl duration-200 animate-in slide-in-from-bottom-4 sm:zoom-in-95"
+      >
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+          <AlertTriangle className="h-6 w-6" />
+        </div>
+        <h2 id="del-title" className="mt-4 text-xl font-extrabold tracking-tight">
+          Delete this order?
+        </h2>
+        <p id="del-desc" className="mt-1 text-sm font-medium text-neutral-500">
+          <span className="font-extrabold text-neutral-950">{order.orderId}</span> ·{" "}
+          {order.customerName} · ₹{order.totalAmount} will be removed permanently.
+        </p>
+        <div className="mt-6 flex gap-2">
+          <button
+            type="button"
+            autoFocus
+            onClick={onCancel}
+            className="h-12 flex-1 rounded-full bg-neutral-100 text-sm font-extrabold tracking-tight text-neutral-950 transition-all hover:bg-neutral-200 active:scale-95"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="h-12 flex-1 rounded-full bg-red-600 text-sm font-extrabold tracking-tight text-white transition-all hover:bg-red-700 active:scale-95"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- page ---------- */
 
 export default function OrdersPage() {
@@ -123,6 +186,7 @@ export default function OrdersPage() {
   const [bulk, setBulk] = useState<Fulfillment>("processing");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<Order | null>(null);
   const q = useDebounced(search).trim().toLowerCase();
 
   /* ----- alerts + realtime ----- */
@@ -263,6 +327,13 @@ export default function OrdersPage() {
         ),
       () => client.delete(o._id),
     );
+  };
+
+  const confirmRemove = () => {
+    if (!toDelete) return;
+    const o = toDelete;
+    setToDelete(null);
+    remove(o);
   };
 
   const setMany = async (ids: string[], to: (id: string) => Fulfillment) => {
@@ -467,7 +538,12 @@ export default function OrdersPage() {
                         )}
                     </>
                   )}
-                  <Btn icon variant="danger" title="Delete order" onClick={() => remove(o)}>
+                  <Btn
+                    icon
+                    variant="danger"
+                    title="Delete order"
+                    onClick={() => setToDelete(o)}
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Btn>
                 </Actions>
@@ -497,7 +573,15 @@ export default function OrdersPage() {
           onSaved={(p) =>
             mutate((d) => d.map((o) => (o._id === open._id ? { ...o, ...p } : o)))
           }
-          onDelete={() => remove(open)}
+          onDelete={() => setToDelete(open)}
+        />
+      )}
+
+      {toDelete && (
+        <ConfirmDelete
+          order={toDelete}
+          onCancel={() => setToDelete(null)}
+          onConfirm={confirmRemove}
         />
       )}
 
