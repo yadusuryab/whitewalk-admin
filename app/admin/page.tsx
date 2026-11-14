@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2, Video } from "lucide-react";
 import { toast } from "sonner";
-import { client } from "@/lib/sanity";
 import { undoable, useDebounced, usePaged, useQuery } from "@/lib/admin-data";
 import {
   BLUE_TAG,
@@ -36,6 +35,15 @@ const STATUS: [Status, string][] = [
 ];
 const LABEL_OPTS: [string, any][] = [["all", "All labels"], ...LABELS];
 const LABEL_TITLE: Record<string, string> = Object.fromEntries(LABELS);
+
+// Writes go through the server route (cookie auth). No Sanity token in the browser.
+const api = async (id: string, init: RequestInit) => {
+  const r = await fetch(`/api/products/${id}`, {
+    ...init,
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!r.ok) throw new Error("Request failed");
+};
 
 export default function ProductsPage() {
   const { data, error, refetch, mutate } = useQuery<Shoe[]>("shoes", QUERY);
@@ -75,7 +83,7 @@ export default function ProductsPage() {
     const next = !s.isDisabled;
     patch(s._id, { isDisabled: next });
     try {
-      await client.patch(s._id).set({ isDisabled: next }).commit();
+      await api(s._id, { method: "PUT", body: JSON.stringify({ isDisabled: next }) });
     } catch {
       patch(s._id, { isDisabled: !next });
       toast.error("Couldn't update status");
@@ -89,7 +97,7 @@ export default function ProductsPage() {
       () => mutate((d) => d.filter((x) => x._id !== s._id)),
       () =>
         mutate((d) => [...d, s].sort((a, b) => a.orderNumber - b.orderNumber)),
-      () => client.delete(s._id),
+      () => api(s._id, { method: "DELETE" }),
     );
 
   return (

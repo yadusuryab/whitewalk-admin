@@ -79,7 +79,7 @@ export type MethodFilter = "all" | Order["shippingMethod"];
 // Image fields are Sanity objects, so resolve them to CDN URLs here.
 // "auto=format" is also what copyImage() swaps for "fm=png".
 // `...` already includes randomThirdSize.
-export const QUERY = `*[_type == "order"] | order(createdAt desc) {
+export const QUERY = `*[_type == "order"] | order(createdAt desc) [0...300] {
   ...,
   "paymentScreenshotUrl": paymentScreenshot.asset->url,
   items[]{

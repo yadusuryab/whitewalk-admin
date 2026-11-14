@@ -6,7 +6,6 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { BadgeCheck, Plus, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { client } from "@/lib/sanity";
 import { undoable, useDebounced, usePaged, useQuery } from "@/lib/admin-data";
 import {
   Actions,
@@ -52,6 +51,15 @@ const QUERY = `*[_type == "review"] | order(createdAt desc) {
 }`;
 
 const thumb = (u: string) => `${u}?w=128&h=128&fit=crop&auto=format`;
+
+// Writes go through the server route (cookie auth). No Sanity token in the browser.
+const api = async (id: string, init: RequestInit) => {
+  const r = await fetch(`/api/reviews/${id}`, {
+    ...init,
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!r.ok) throw new Error("Request failed");
+};
 
 function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
   useEffect(() => {
@@ -109,7 +117,7 @@ export default function ReviewsPage() {
     const next = !r.isApproved;
     patch(r._id, { isApproved: next });
     try {
-      await client.patch(r._id).set({ isApproved: next }).commit();
+      await api(r._id, { method: "PUT", body: JSON.stringify({ isApproved: next }) });
     } catch {
       patch(r._id, { isApproved: !next });
       toast.error("Couldn't update review");
@@ -125,7 +133,7 @@ export default function ReviewsPage() {
         mutate((d) =>
           [...d, r].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
         ),
-      () => client.delete(r._id),
+      () => api(r._id, { method: "DELETE" }),
     );
 
   return (

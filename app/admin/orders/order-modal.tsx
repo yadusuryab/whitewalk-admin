@@ -73,34 +73,40 @@ export default function OrderModal({
     setTimeout(() => setCopied(null), 1500);
   };
 
-  const save = async () => {
-    setBusy(true);
-    try {
-      // .set() ignores undefined, so cleared fields are .unset()
-      const set: Record<string, unknown> = {
-        fulfillmentStatus: f.fulfillmentStatus,
-        paymentStatus: f.paymentStatus,
-      };
-      const unset: string[] = [];
-      for (const k of TEXT_KEYS) {
-        const v = f[k].trim();
-        if (v) set[k] = v;
-        else unset.push(k);
-      }
-      let p = client.patch(order._id).set(set);
-      if (unset.length) p = p.unset(unset);
-      await p.commit();
-      onSaved({
-        ...set,
-        ...Object.fromEntries(unset.map((k) => [k, undefined])),
-      } as Partial<Order>);
-      onClose();
-    } catch (e) {
-      console.error(e);
-      toast.error("Couldn't save order");
-      setBusy(false);
+// remove: import { client } from "@/lib/sanity";
+
+// replace the body of save()'s try block:
+const save = async () => {
+  setBusy(true);
+  try {
+    // cleared fields are unset on the server
+    const set: Record<string, unknown> = {
+      fulfillmentStatus: f.fulfillmentStatus,
+      paymentStatus: f.paymentStatus,
+    };
+    const unset: string[] = [];
+    for (const k of TEXT_KEYS) {
+      const v = f[k].trim();
+      if (v) set[k] = v;
+      else unset.push(k);
     }
-  };
+    const r = await fetch(`/api/orders/${order._id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ set, unset }),
+    });
+    if (!r.ok) throw new Error("Request failed");
+    onSaved({
+      ...set,
+      ...Object.fromEntries(unset.map((k) => [k, undefined])),
+    } as Partial<Order>);
+    onClose();
+  } catch (e) {
+    console.error(e);
+    toast.error("Couldn't save order");
+    setBusy(false);
+  }
+};
 
   const copyAddress = async () => {
     const sizes = [

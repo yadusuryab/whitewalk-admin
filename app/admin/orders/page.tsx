@@ -6,7 +6,6 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Bell, BellOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { client } from "@/lib/sanity";
 import { undoable, useDebounced, usePaged, useQuery } from "@/lib/admin-data";
 import {
   Actions,
@@ -48,6 +47,19 @@ import {
 
 // Modal code loads only when an order is opened.
 const OrderModal = dynamic(() => import("./order-modal"), { ssr: false });
+
+/* ---------- server calls (cookie auth, no Sanity token in browser) ---------- */
+
+const POLL_MS = 30_000;
+
+const call = async (url: string, init?: RequestInit) => {
+  const r = await fetch(url, {
+    ...init,
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!r.ok) throw new Error("Request failed");
+  return r.json();
+};
 
 /* ---------- filters ---------- */
 
@@ -189,51 +201,84 @@ export default function OrdersPage() {
   const [toDelete, setToDelete] = useState<Order | null>(null);
   const q = useDebounced(search).trim().toLowerCase();
 
-  /* ----- alerts + realtime ----- */
+  /* ----- server search across all orders ----- */
+
+  const [found, setFound] = useState<Order[]>([]);
+
+  useEffect(() => {
+    if (q.length < 3) {
+      setFound([]);
+      return;
+    }
+    const ac = new AbortController();
+    call(`/api/orders/search?q=${encodeURIComponent(q)}`, { signal: ac.signal })
+      .then(setFound)
+      .catch(() => {});
+    return () => ac.abort();
+  }, [q]);
+
+  // recent orders + search hits, deduped
+  const all = useMemo(() => {
+    const m = new Map(orders.map((o) => [o._id, o]));
+    found.forEach((o) => m.has(o._id) || m.set(o._id, o));
+    return [...m.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [orders, found]);
+
+  /* ----- alerts + light polling ----- */
 
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">("default");
   const [soundOn, setSoundOn] = useState(true);
   const soundRef = useRef(true);
   soundRef.current = soundOn;
-  const known = useRef(new Set<string>());
+  const known = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     setPerm("Notification" in window ? Notification.permission : "unsupported");
   }, []);
+
+  // Alerts: diff each fresh list against the ids already seen.
   useEffect(() => {
-    known.current = new Set(orders.map((o) => o._id));
-  }, [orders]);
-
-  // Any change refetches, debounced so bursts collapse into one request.
-  useEffect(() => {
-    let t: ReturnType<typeof setTimeout>;
-    const sub = client
-      .listen(`*[_type == "order"]`, {}, { includeResult: true })
-      .subscribe((u: any) => {
-        clearTimeout(t);
-        t = setTimeout(refetch, 300);
-
-        const o = u.result as Order | undefined;
-        if (u.transition !== "appear" || !o || known.current.has(o._id)) return;
-        known.current.add(o._id);
-
-        toast(`New order · ₹${o.totalAmount}`, {
-          description: o.customerName,
-          duration: 8000,
-          action: { label: "View", onClick: () => setOpenId(o._id) },
-        });
-        // Audio is created on demand, so nothing is downloaded up front.
-        if (soundRef.current) new Audio("/notification.mp3").play().catch(() => {});
-        if ("Notification" in window && Notification.permission === "granted") {
-          new Notification("New order received", {
-            body: `${o.customerName} • ₹${o.totalAmount}`,
-            tag: o._id,
-          });
-        }
+    if (!data) return;
+    if (!known.current) {
+      known.current = new Set(data.map((o) => o._id)); // first load: no alerts
+      return;
+    }
+    const fresh = data.filter((o) => !known.current!.has(o._id));
+    fresh.forEach((o) => {
+      known.current!.add(o._id);
+      toast(`New order · ₹${o.totalAmount}`, {
+        description: o.customerName,
+        duration: 8000,
+        action: { label: "View", onClick: () => setOpenId(o._id) },
       });
+      if (soundRef.current) new Audio("/notification.mp3").play().catch(() => {});
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("New order received", {
+          body: `${o.customerName} • ₹${o.totalAmount}`,
+          tag: o._id,
+        });
+      }
+    });
+  }, [data]);
+
+  // Polls a few-byte signature. Full list is refetched only when it changes.
+  useEffect(() => {
+    let sig: string | null = null;
+    const tick = async () => {
+      if (document.hidden) return;
+      try {
+        const s = await call("/api/orders/poll");
+        const next = `${s.count}|${s.latest}`;
+        if (sig !== null && next !== sig) refetch();
+        sig = next;
+      } catch {}
+    };
+    tick();
+    const id = setInterval(tick, POLL_MS);
+    document.addEventListener("visibilitychange", tick);
     return () => {
-      clearTimeout(t);
-      sub.unsubscribe();
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
     };
   }, [refetch]);
 
@@ -254,7 +299,7 @@ export default function OrdersPage() {
   const filtered = useMemo(() => {
     const phone = q && looksLikePhone(q) ? normPhone(q) : "";
     const [lo, hi] = range(preset, from, to);
-    return orders.filter((o) => {
+    return all.filter((o) => {
       if (
         tab === "abandoned"
           ? !isAbandoned(o)
@@ -276,7 +321,7 @@ export default function OrdersPage() {
         )
       );
     });
-  }, [orders, tab, q, status, pay, method, preset, from, to]);
+  }, [all, tab, q, status, pay, method, preset, from, to]);
 
   const { rows, page, pages, setPage } = usePaged(
     filtered,
@@ -284,7 +329,7 @@ export default function OrdersPage() {
     `${tab}|${q}|${status}|${pay}|${method}|${preset}|${from}|${to}|${perPage}`,
   );
 
-  const open = orders.find((o) => o._id === openId);
+  const open = all.find((o) => o._id === openId);
   const filtering =
     !!search ||
     preset !== "all" ||
@@ -320,12 +365,16 @@ export default function OrdersPage() {
     undoable(
       o._id,
       `Deleted ${o.orderId}`,
-      () => mutate((d) => d.filter((x) => x._id !== o._id)),
-      () =>
+      () => {
+        mutate((d) => d.filter((x) => x._id !== o._id));
+        setFound((d) => d.filter((x) => x._id !== o._id));
+      },
+      () => {
         mutate((d) =>
           [...d, o].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-        ),
-      () => client.delete(o._id),
+        );
+      },
+      () => call(`/api/orders/${o._id}`, { method: "DELETE" }),
     );
   };
 
@@ -336,20 +385,24 @@ export default function OrdersPage() {
     remove(o);
   };
 
-  const setMany = async (ids: string[], to: (id: string) => Fulfillment) => {
-    const tx = client.transaction();
-    ids.forEach((id) => tx.patch(id, (p) => p.set({ fulfillmentStatus: to(id) })));
-    await tx.commit();
-  };
+  const setMany = (ids: string[], to: (id: string) => Fulfillment) =>
+    call("/api/orders/bulk", {
+      method: "POST",
+      body: JSON.stringify({
+        updates: ids.map((id) => ({ id, fulfillmentStatus: to(id) })),
+      }),
+    });
 
   // Optimistic bulk update with Undo. No confirm dialog.
   const applyBulk = async () => {
     const ids = [...picked];
-    const prev = new Map(orders.map((o) => [o._id, o.fulfillmentStatus]));
-    const paint = (to: (id: string) => Fulfillment) =>
-      mutate((d) =>
-        d.map((o) => (ids.includes(o._id) ? { ...o, fulfillmentStatus: to(o._id) } : o)),
-      );
+    const prev = new Map(all.map((o) => [o._id, o.fulfillmentStatus]));
+    const paint = (to: (id: string) => Fulfillment) => {
+      const apply = (d: Order[]) =>
+        d.map((o) => (ids.includes(o._id) ? { ...o, fulfillmentStatus: to(o._id) } : o));
+      mutate(apply);
+      setFound(apply);
+    };
     const restore = (id: string) => prev.get(id)!;
 
     paint(() => bulk);
@@ -570,9 +623,10 @@ export default function OrdersPage() {
           key={open._id}
           order={open}
           onClose={() => setOpenId(null)}
-          onSaved={(p) =>
-            mutate((d) => d.map((o) => (o._id === open._id ? { ...o, ...p } : o)))
-          }
+          onSaved={(p) => {
+            mutate((d) => d.map((o) => (o._id === open._id ? { ...o, ...p } : o)));
+            setFound((d) => d.map((o) => (o._id === open._id ? { ...o, ...p } : o)));
+          }}
           onDelete={() => setToDelete(open)}
         />
       )}
