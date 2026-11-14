@@ -1,96 +1,39 @@
-// // app/api/products/[id]/route.ts
-// import { NextRequest, NextResponse } from 'next/server'
-// import { getShoe, updateShoe, deleteShoe } from '@/lib/sanity'
-// import { verifySession } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
+import { verifySession } from '@/lib/auth'
+import { writeClient, createShoe } from '@/lib/sanity-server'
 
-// export async function GET(
-//   request: NextRequest,
-//   { params }: { params: Promise<{ id: string }> }
-// ) {
-//   try {
-//     // Await the params
-//     const { id } = await params
-    
-//     // Verify authentication
-//     const token = request.cookies.get('admin_token')?.value
-    
-//     if (!token) {
-//       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-//     }
+async function authed(req: NextRequest) {
+  const token = req.cookies.get('admin_token')?.value
+  return !!token && !!(await verifySession(token))
+}
 
-//     const session = await verifySession(token)
-//     if (!session) {
-//       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-//     }
+// Fresh, uncached, slim list for the admin table.
+// Must return the same fields as your admin QUERY in components/admin/products/shared.
+const ADMIN_LIST = `*[_type == "shoe"] | order(orderNumber asc) {
+  _id, orderNumber, productName, price, isDisabled, productLabel,
+  videoUrl, disabledSizes,
+  "img": images[0]
+}`
 
-//     const shoe = await getShoe(id)
-//     return NextResponse.json(shoe)
-//   } catch (error) {
-//     return NextResponse.json(
-//       { error: 'Failed to fetch product' },
-//       { status: 500 }
-//     )
-//   }
-// }
+export async function GET(req: NextRequest) {
+  if (!(await authed(req)))
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    return NextResponse.json(await writeClient.fetch(ADMIN_LIST))
+  } catch {
+    return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 })
+  }
+}
 
-// export async function PUT(
-//   request: NextRequest,
-//   { params }: { params: Promise<{ id: string }> }
-// ) {
-//   try {
-//     // Await the params
-//     const { id } = await params
-    
-//     // Verify authentication
-//     const token = request.cookies.get('admin_token')?.value
-    
-//     if (!token) {
-//       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-//     }
-
-//     const session = await verifySession(token)
-//     if (!session) {
-//       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-//     }
-
-//     const data = await request.json()
-//     const shoe = await updateShoe(id, data)
-    
-//     return NextResponse.json(shoe)
-//   } catch (error) {
-//     return NextResponse.json(
-//       { error: 'Failed to update product' },
-//       { status: 500 }
-//     )
-//   }
-// }
-
-// export async function DELETE(
-//   request: NextRequest,
-//   { params }: { params: Promise<{ id: string }> }
-// ) {
-//   try {
-//     // Await the params
-//     const { id } = await params
-    
-//     // Verify authentication
-//     const token = request.cookies.get('admin_token')?.value
-    
-//     if (!token) {
-//       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-//     }
-
-//     const session = await verifySession(token)
-//     if (!session) {
-//       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-//     }
-
-//     await deleteShoe(id)
-//     return NextResponse.json({ success: true })
-//   } catch (error) {
-//     return NextResponse.json(
-//       { error: 'Failed to delete product' },
-//       { status: 500 }
-//     )
-//   }
-// }
+export async function POST(req: NextRequest) {
+  if (!(await authed(req)))
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const shoe = await createShoe(await req.json())
+    revalidateTag('shoes' ,'MAX')
+    return NextResponse.json(shoe)
+  } catch {
+    return NextResponse.json({ error: 'Failed to create product' }, { status: 500 })
+  }
+}
