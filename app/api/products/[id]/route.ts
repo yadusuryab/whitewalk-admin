@@ -1,39 +1,46 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { revalidateTag } from 'next/cache'
-import { verifySession } from '@/lib/auth'
-import { writeClient, createShoe } from '@/lib/sanity-server'
+import { NextRequest, NextResponse } from "next/server";
+import { authed, bust, dropAssets, saveShoe, writeClient } from "@/lib/sanity-server";
 
-async function authed(req: NextRequest) {
-  const token = req.cookies.get('admin_token')?.value
-  return !!token && !!(await verifySession(token))
-}
+type Ctx = { params: Promise<{ id: string }> };
+const fail = (error: string, status: number) => NextResponse.json({ error }, { status });
 
-// Fresh, uncached, slim list for the admin table.
-// Must return the same fields as your admin QUERY in components/admin/products/shared.
-const ADMIN_LIST = `*[_type == "shoe"] | order(orderNumber asc) {
-  _id, orderNumber, productName, price, isDisabled, productLabel,
-  videoUrl, disabledSizes,
-  "img": images[0]
-}`
+// Only these fields can be written from the admin UI.
+const KEYS = ["productName", "price", "productLabel", "disabledSizes", "isDisabled", "offer1Pair", "offer2Pair", "offer3Pair"];
 
-export async function GET(req: NextRequest) {
-  if (!(await authed(req)))
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export async function PUT(req: NextRequest, { params }: Ctx) {
+  if (!(await authed(req))) return fail("Unauthorized", 401);
   try {
-    return NextResponse.json(await writeClient.fetch(ADMIN_LIST))
-  } catch {
-    return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 })
+    const { id } = await params;
+    const body = await req.json();
+    const data: Record<string, any> = {};
+    for (const k of KEYS) if (body[k] !== undefined) data[k] = body[k];
+    if (data.productName !== undefined) data.productName = String(data.productName).trim();
+    if (data.productName === "") return fail("Product name is required", 400);
+    if (data.price !== undefined && !(Number(data.price) > 0)) return fail("Invalid price", 400);
+
+    const order = body.orderNumber !== undefined ? Number(body.orderNumber) : undefined;
+    if (!Object.keys(data).length && order === undefined) return NextResponse.json({ ok: true });
+
+    await saveShoe(id, data, order && order > 0 ? order : undefined);
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return fail(e.message || "Failed to update", 500);
   }
 }
 
-export async function POST(req: NextRequest) {
-  if (!(await authed(req)))
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export async function DELETE(req: NextRequest, { params }: Ctx) {
+  if (!(await authed(req))) return fail("Unauthorized", 401);
   try {
-    const shoe = await createShoe(await req.json())
-    revalidateTag('shoes' ,'MAX')
-    return NextResponse.json(shoe)
-  } catch {
-    return NextResponse.json({ error: 'Failed to create product' }, { status: 500 })
+    const { id } = await params;
+    const doc = await writeClient.fetch(
+      `*[_id == $id][0]{ "refs": array::compact([...images[].asset._ref, video.asset._ref, videoPoster.asset._ref]) }`,
+      { id },
+    );
+    await writeClient.delete(id);
+    await dropAssets(doc?.refs ?? []);
+    bust();
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return fail(e.message || "Failed to delete", 500);
   }
 }

@@ -2,53 +2,76 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { client } from "@/lib/sanity";
 
-// Module-level cache. Revisiting a page paints instantly, then revalidates.
-const cache = new Map<string, unknown>();
-// Ids deleted but still inside the undo window. Refetches must not resurrect them.
-const pendingDeletes = new Set<string>();
+/** Fetch wrapper: JSON or FormData body, throws Error(message) on failure. */
+export async function api<T = any>(
+  url: string,
+  init: Omit<RequestInit, "body"> & { body?: any } = {},
+): Promise<T> {
+  const { body, headers, ...rest } = init;
+  const raw = body instanceof FormData || typeof body === "string" || body == null;
+  const res = await fetch(url, {
+    ...rest,
+    body: raw ? body : JSON.stringify(body),
+    headers: raw ? headers : { "Content-Type": "application/json", ...headers },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
 
-export function useQuery<T>(key: string, query: string) {
-  const [data, setData] = useState<T | undefined>(() =>
-    cache.has(key) ? (cache.get(key) as T) : undefined,
-  );
-  const [error, setError] = useState(false);
+/** In-memory page cache shared by all admin lists. Cleared after any write. */
+export const listCache = new Map<string, any>();
 
-  const refetch = useCallback(async () => {
-    try {
-      const raw = await client.fetch<T>(query, {}, { cache: "no-store" });
-      const next = Array.isArray(raw)
-        ? (raw.filter((x: any) => !pendingDeletes.has(x?._id)) as T)
-        : raw;
-      cache.set(key, next);
-      setData(next);
-      setError(false);
-    } catch (e) {
-      console.error(e);
-      setError(true);
-    }
-  }, [key, query]);
+/**
+ * One server page, cached in memory.
+ * mutate() edits the visible page and drops every other cached page.
+ * refetch() drops the cache and reloads.
+ */
+export function useList<T>(url: string, qs: string) {
+  const key = `${url}?${qs}`;
+  const [state, setState] = useState<{ key?: string; data?: T; error?: boolean }>({});
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    refetch();
-  }, [refetch]);
+    const hit = listCache.get(key);
+    if (hit) return setState({ key, data: hit });
+    const ac = new AbortController();
+    api<T>(key, { signal: ac.signal })
+      .then((data) => {
+        listCache.set(key, data);
+        setState({ key, data });
+      })
+      .catch((e) => e?.name !== "AbortError" && setState((s) => ({ ...s, error: true })));
+    return () => ac.abort();
+  }, [key, tick]);
 
   const mutate = useCallback(
     (fn: (d: T) => T) =>
-      setData((prev) => {
-        if (prev === undefined) return prev;
-        const next = fn(prev);
-        cache.set(key, next);
-        return next;
+      setState((s) => {
+        if (!s.data) return s;
+        const data = fn(s.data);
+        listCache.clear();
+        if (s.key) listCache.set(s.key, data);
+        return { ...s, data };
       }),
-    [key],
+    [],
   );
 
-  return { data, error, refetch, mutate };
+  const refetch = useCallback(() => {
+    listCache.clear();
+    setState((s) => ({ ...s, error: false }));
+    setTick((t) => t + 1);
+  }, []);
+
+  return { ...state, loading: state.key !== key && !state.error, mutate, refetch };
 }
 
-export function useDebounced<T>(value: T, ms = 200) {
+// Ids deleted but still inside the undo window.
+const pending = new Set<string>();
+export const isPending = (id: string) => pending.has(id);
+
+export function useDebounced<T>(value: T, ms = 250) {
   const [v, setV] = useState(value);
   useEffect(() => {
     const t = setTimeout(() => setV(value), ms);
@@ -57,26 +80,7 @@ export function useDebounced<T>(value: T, ms = 200) {
   return v;
 }
 
-export function usePaged<T>(items: T[], perPage: number, resetKey: string) {
-  const [page, setPage] = useState(1);
-  useEffect(() => setPage(1), [resetKey]);
-  const pages = Math.max(1, Math.ceil(items.length / perPage));
-  const cur = Math.min(page, pages);
-  return {
-    rows: items.slice((cur - 1) * perPage, cur * perPage),
-    page: cur,
-    pages,
-    setPage: (p: number) => {
-      setPage(p);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    },
-  };
-}
-
-/**
- * Delete without a confirm dialog.
- * UI updates at once. The real delete runs after 5s unless the user hits Undo.
- */
+/** Delete without a confirm dialog: runs after 5s unless the user hits Undo. */
 export function undoable(
   id: string,
   label: string,
@@ -84,19 +88,19 @@ export function undoable(
   undo: () => void,
   commit: () => Promise<unknown>,
 ) {
-  pendingDeletes.add(id);
+  pending.add(id);
   apply();
   const timer = setTimeout(async () => {
     try {
       await commit();
     } catch (e) {
       console.error(e);
-      pendingDeletes.delete(id);
+      pending.delete(id);
       undo();
       toast.error("Couldn't delete. Restored.");
       return;
     }
-    pendingDeletes.delete(id);
+    pending.delete(id);
   }, 5000);
 
   toast(label, {
@@ -105,7 +109,7 @@ export function undoable(
       label: "Undo",
       onClick: () => {
         clearTimeout(timer);
-        pendingDeletes.delete(id);
+        pending.delete(id);
         undo();
       },
     },

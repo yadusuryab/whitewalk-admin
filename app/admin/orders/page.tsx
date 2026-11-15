@@ -3,68 +3,33 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Bell, BellOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { undoable, useDebounced, usePaged, useQuery } from "@/lib/admin-data";
+import { api, isPending, undoable, useDebounced, useList } from "@/lib/admin-data";
 import {
-  Actions,
-  Btn,
-  Chip,
-  Empty,
-  PER_PAGE,
-  PageHead,
-  Pager,
-  Row,
-  SearchInput,
-  Select,
-  Skeleton,
-  Thumb,
-  checkCls,
-  selectCls,
+  Actions, Btn, Chip, Empty, PER_PAGE, PageHead, Pager, Row, SearchInput,
+  Select, Skeleton, checkCls, selectCls,
 } from "@/components/admin/ui";
 import {
-  Addons,
-  MethodTag,
-  PAY_LABEL,
-  PAY_STATUSES,
-  PayBadge,
-  QUERY,
-  STATUSES,
-  StatusBadge,
-  WaButton,
-  WaPrepaidButton,
-  cap,
-  fmtDate,
-  isAbandoned,
-  looksLikePhone,
-  normPhone,
-  type Fulfillment,
-  type MethodFilter,
-  type Order,
-  type PaymentStatus,
+  Addons, MethodTag, PAY_LABEL, PAY_STATUSES, PayBadge, STATUSES, StatusBadge,
+  WaButton, WaPrepaidButton, cap, fmtDate, isAbandoned,
+  type Fulfillment, type MethodFilter, type Order, type PaymentStatus,
 } from "./shared";
 
 // Modal code loads only when an order is opened.
 const OrderModal = dynamic(() => import("./order-modal"), { ssr: false });
 
-/* ---------- server calls (cookie auth, no Sanity token in browser) ---------- */
-
-const POLL_MS = 30_000;
-
-const call = async (url: string, init?: RequestInit) => {
-  const r = await fetch(url, {
-    ...init,
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!r.ok) throw new Error("Request failed");
-  return r.json();
-};
-
-/* ---------- filters ---------- */
+const POLL_MS = 60_000;
+const LIST = "/api/orders/list";
 
 type Tab = "orders" | "abandoned";
 type DatePreset = "all" | "today" | "yesterday" | "7d" | "30d" | "month" | "custom";
+type Res = {
+  total: number;
+  items: Order[];
+  counts: { paid: number; abandoned: number; verifying: number };
+};
 
 const DATES: [DatePreset, string][] = [
   ["all", "Any date"],
@@ -96,23 +61,17 @@ function range(p: DatePreset, from: string, to: string): [number | null, number 
   const d = new Date();
   const t0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   switch (p) {
-    case "today":
-      return [t0, t0 + DAY - 1];
-    case "yesterday":
-      return [t0 - DAY, t0 - 1];
-    case "7d":
-      return [t0 - 6 * DAY, null];
-    case "30d":
-      return [t0 - 29 * DAY, null];
-    case "month":
-      return [new Date(d.getFullYear(), d.getMonth(), 1).getTime(), null];
+    case "today": return [t0, t0 + DAY - 1];
+    case "yesterday": return [t0 - DAY, t0 - 1];
+    case "7d": return [t0 - 6 * DAY, null];
+    case "30d": return [t0 - 29 * DAY, null];
+    case "month": return [new Date(d.getFullYear(), d.getMonth(), 1).getTime(), null];
     case "custom":
       return [
         from ? +new Date(`${from}T00:00:00`) : null,
         to ? +new Date(`${to}T23:59:59.999`) : null,
       ];
-    default:
-      return [null, null];
+    default: return [null, null];
   }
 }
 
@@ -182,9 +141,6 @@ function ConfirmDelete({
 /* ---------- page ---------- */
 
 export default function OrdersPage() {
-  const { data, error, refetch, mutate } = useQuery<Order[]>("orders", QUERY);
-  const orders = useMemo(() => data ?? [], [data]);
-
   const [tab, setTab] = useState<Tab>("orders");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | Fulfillment>("all");
@@ -194,82 +150,96 @@ export default function OrdersPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [perPage, setPerPage] = useState(10);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  // id → fulfillment status at selection time (lets bulk Undo work across pages)
+  const [picked, setPicked] = useState<Map<string, Fulfillment>>(new Map());
   const [bulk, setBulk] = useState<Fulfillment>("processing");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [full, setFull] = useState<Order | null>(null);
   const [toDelete, setToDelete] = useState<Order | null>(null);
-  const q = useDebounced(search).trim().toLowerCase();
+  const q = useDebounced(search).trim();
 
-  /* ----- server search across all orders ----- */
+  // Filters → one query string. The server does all filtering and paging.
+  const [lo, hi] = range(preset, from, to);
+  const f = new URLSearchParams({ tab, q, status, pay, method });
+  if (lo !== null) f.set("lo", new Date(lo).toISOString());
+  if (hi !== null) f.set("hi", new Date(hi).toISOString());
+  const filterQs = f.toString();
 
-  const [found, setFound] = useState<Order[]>([]);
+  const { data, error, loading, mutate, refetch } = useList<Res>(
+    LIST,
+    `${filterQs}&page=${page}&per=${perPage}`,
+  );
+
+  const rows = (data?.items ?? []).filter((o) => !isPending(o._id));
+  const total = data?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  const paidCount = data?.counts.paid ?? 0;
+  const abandonedCount = data?.counts.abandoned ?? 0;
+  const verifying = data?.counts.verifying ?? 0;
+
+  // Any filter change goes back to page 1.
+  const reset = <T,>(set: (v: T) => void) => (v: T) => (set(v), setPage(1));
 
   useEffect(() => {
-    if (q.length < 3) {
-      setFound([]);
-      return;
-    }
+    if (data && page > pages) setPage(pages);
+  }, [data, page, pages]);
+
+  // Full order (address, payment proof…) is fetched only when the modal opens.
+  useEffect(() => {
+    setFull(null);
+    if (!openId) return;
     const ac = new AbortController();
-    call(`/api/orders/search?q=${encodeURIComponent(q)}`, { signal: ac.signal })
-      .then(setFound)
-      .catch(() => {});
+    api<Order>(`${LIST}?id=${openId}`, { signal: ac.signal })
+      .then(setFull)
+      .catch((e) => {
+        if (e?.name === "AbortError") return;
+        toast.error("Couldn't load order");
+        setOpenId(null);
+      });
     return () => ac.abort();
-  }, [q]);
+  }, [openId]);
 
-  // recent orders + search hits, deduped
-  const all = useMemo(() => {
-    const m = new Map(orders.map((o) => [o._id, o]));
-    found.forEach((o) => m.has(o._id) || m.set(o._id, o));
-    return [...m.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [orders, found]);
-
-  /* ----- alerts + light polling ----- */
+  /* ----- alerts + polling (one ~400 byte request per minute, tab visible only) ----- */
 
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">("default");
   const [soundOn, setSoundOn] = useState(true);
   const soundRef = useRef(true);
   soundRef.current = soundOn;
-  const known = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     setPerm("Notification" in window ? Notification.permission : "unsupported");
   }, []);
 
-  // Alerts: diff each fresh list against the ids already seen.
-  useEffect(() => {
-    if (!data) return;
-    if (!known.current) {
-      known.current = new Set(data.map((o) => o._id)); // first load: no alerts
-      return;
-    }
-    const fresh = data.filter((o) => !known.current!.has(o._id));
-    fresh.forEach((o) => {
-      known.current!.add(o._id);
-      toast(`New order · ₹${o.totalAmount}`, {
-        description: o.customerName,
-        duration: 8000,
-        action: { label: "View", onClick: () => setOpenId(o._id) },
-      });
-      if (soundRef.current) new Audio("/notification.mp3").play().catch(() => {});
-      if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("New order received", {
-          body: `${o.customerName} • ₹${o.totalAmount}`,
-          tag: o._id,
-        });
-      }
-    });
-  }, [data]);
-
-  // Polls a few-byte signature. Full list is refetched only when it changes.
   useEffect(() => {
     let sig: string | null = null;
+    const seen = new Set<string>();
     const tick = async () => {
       if (document.hidden) return;
       try {
-        const s = await call("/api/orders/poll");
-        const next = `${s.count}|${s.latest}`;
-        if (sig !== null && next !== sig) refetch();
+        const s = await api<{ count: number; recent: any[] }>(`${LIST}?poll=1`);
+        const next = `${s.count}|${s.recent[0]?._id}`;
+        if (sig !== null) {
+          s.recent
+            .filter((o) => !seen.has(o._id))
+            .reverse()
+            .forEach((o) => {
+              toast(`New order · ₹${o.totalAmount}`, {
+                description: o.customerName,
+                duration: 8000,
+                action: { label: "View", onClick: () => setOpenId(o._id) },
+              });
+              if (soundRef.current) new Audio("/notification.mp3").play().catch(() => {});
+              if ("Notification" in window && Notification.permission === "granted")
+                new Notification("New order received", {
+                  body: `${o.customerName} • ₹${o.totalAmount}`,
+                  tag: o._id,
+                });
+            });
+          if (next !== sig) refetch();
+        }
+        s.recent.forEach((o) => seen.add(o._id));
         sig = next;
       } catch {}
     };
@@ -289,47 +259,6 @@ export default function OrdersPage() {
 
   /* ----- derived ----- */
 
-  const abandonedCount = useMemo(() => orders.filter(isAbandoned).length, [orders]);
-  const paidCount = orders.length - abandonedCount;
-  const verifying = useMemo(
-    () => orders.filter((o) => o.paymentStatus === "verifying").length,
-    [orders],
-  );
-
-  const filtered = useMemo(() => {
-    const phone = q && looksLikePhone(q) ? normPhone(q) : "";
-    const [lo, hi] = range(preset, from, to);
-    return all.filter((o) => {
-      if (
-        tab === "abandoned"
-          ? !isAbandoned(o)
-          : isAbandoned(o) ||
-            (status !== "all" && o.fulfillmentStatus !== status) ||
-            (pay !== "all" && o.paymentStatus !== pay)
-      )
-        return false;
-      if (method !== "all" && o.shippingMethod !== method) return false;
-      const t = +new Date(o.createdAt);
-      if ((lo !== null && t < lo) || (hi !== null && t > hi)) return false;
-      if (!q) return true;
-      return (
-        [o.orderId, o.customerName, o.utr, o.razorpayPaymentId, o.trackingNumber].some(
-          (v) => v?.toLowerCase().includes(q),
-        ) ||
-        [o.contact1, o.contact2].some(
-          (v) => v?.includes(q) || (!!phone && normPhone(v).includes(phone)),
-        )
-      );
-    });
-  }, [all, tab, q, status, pay, method, preset, from, to]);
-
-  const { rows, page, pages, setPage } = usePaged(
-    filtered,
-    perPage,
-    `${tab}|${q}|${status}|${pay}|${method}|${preset}|${from}|${to}|${perPage}`,
-  );
-
-  const open = all.find((o) => o._id === openId);
   const filtering =
     !!search ||
     preset !== "all" ||
@@ -340,41 +269,54 @@ export default function OrdersPage() {
 
   /* ----- actions ----- */
 
-  const toggleOne = (id: string) =>
+  const patchRows = (fn: (o: Order) => Order) =>
+    mutate((d) => ({ ...d, items: d.items.map(fn) }));
+
+  const toggleOne = (o: Order) =>
     setPicked((p) => {
-      const n = new Set(p);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
+      const n = new Map(p);
+      if (n.has(o._id)) n.delete(o._id);
+      else n.set(o._id, o.fulfillmentStatus);
       return n;
     });
 
   const togglePage = () =>
     setPicked((p) => {
-      const n = new Set(p);
-      rows.forEach((o) => (allOnPage ? n.delete(o._id) : n.add(o._id)));
+      const n = new Map(p);
+      rows.forEach((o) => (allOnPage ? n.delete(o._id) : n.set(o._id, o.fulfillmentStatus)));
       return n;
     });
+
+  const selectAll = async () => {
+    try {
+      const all = await api<{ _id: string; s: Fulfillment }[]>(`${LIST}?${filterQs}&ids=1`);
+      setPicked(new Map(all.map((o) => [o._id, o.s])));
+    } catch {
+      toast.error("Couldn't select all");
+    }
+  };
 
   const remove = (o: Order) => {
     setOpenId(null);
     setPicked((p) => {
-      const n = new Set(p);
+      const n = new Map(p);
       n.delete(o._id);
       return n;
     });
     undoable(
       o._id,
       `Deleted ${o.orderId}`,
-      () => {
-        mutate((d) => d.filter((x) => x._id !== o._id));
-        setFound((d) => d.filter((x) => x._id !== o._id));
+      () => mutate((d) => ({ ...d, total: d.total - 1, items: d.items.filter((x) => x._id !== o._id) })),
+      () =>
+        mutate((d) => ({
+          ...d,
+          total: d.total + 1,
+          items: [...d.items, o].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        })),
+      async () => {
+        await api(`/api/orders/${o._id}`, { method: "DELETE" });
+        refetch(); // refills the page and updates counts
       },
-      () => {
-        mutate((d) =>
-          [...d, o].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-        );
-      },
-      () => call(`/api/orders/${o._id}`, { method: "DELETE" }),
     );
   };
 
@@ -385,42 +327,35 @@ export default function OrdersPage() {
     remove(o);
   };
 
-  const setMany = (ids: string[], to: (id: string) => Fulfillment) =>
-    call("/api/orders/bulk", {
+  const setMany = (entries: [string, Fulfillment][]) =>
+    api("/api/orders/bulk", {
       method: "POST",
-      body: JSON.stringify({
-        updates: ids.map((id) => ({ id, fulfillmentStatus: to(id) })),
-      }),
+      body: { updates: entries.map(([id, fulfillmentStatus]) => ({ id, fulfillmentStatus })) },
     });
 
   // Optimistic bulk update with Undo. No confirm dialog.
   const applyBulk = async () => {
-    const ids = [...picked];
-    const prev = new Map(all.map((o) => [o._id, o.fulfillmentStatus]));
-    const paint = (to: (id: string) => Fulfillment) => {
-      const apply = (d: Order[]) =>
-        d.map((o) => (ids.includes(o._id) ? { ...o, fulfillmentStatus: to(o._id) } : o));
-      mutate(apply);
-      setFound(apply);
-    };
-    const restore = (id: string) => prev.get(id)!;
+    const prev = new Map(picked);
+    const ids = [...prev.keys()];
+    const paint = (to: (id: string) => Fulfillment) =>
+      patchRows((o) => (prev.has(o._id) ? { ...o, fulfillmentStatus: to(o._id) } : o));
 
     paint(() => bulk);
-    setPicked(new Set());
+    setPicked(new Map());
     setBulkBusy(true);
     try {
-      await setMany(ids, () => bulk);
+      await setMany(ids.map((id) => [id, bulk]));
       toast.success(`${ids.length} marked ${cap(bulk)}`, {
         action: {
           label: "Undo",
           onClick: async () => {
-            paint(restore);
-            await setMany(ids, restore).catch(() => toast.error("Undo failed"));
+            paint((id) => prev.get(id)!);
+            await setMany(ids.map((id) => [id, prev.get(id)!])).catch(() => toast.error("Undo failed"));
           },
         },
       });
     } catch {
-      paint(restore);
+      paint((id) => prev.get(id)!);
       toast.error("Couldn't update orders");
     } finally {
       setBulkBusy(false);
@@ -435,11 +370,18 @@ export default function OrdersPage() {
     setPreset("all");
     setFrom("");
     setTo("");
+    setPage(1);
   };
 
   const switchTab = (t: Tab) => {
     setTab(t);
-    setPicked(new Set());
+    setPage(1);
+    setPicked(new Map());
+  };
+
+  const goto = (p: number) => {
+    setPage(p);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const alertsOn = perm === "granted" && soundOn;
@@ -480,18 +422,18 @@ export default function OrdersPage() {
 
         <SearchInput
           value={search}
-          onChange={setSearch}
+          onChange={reset(setSearch)}
           placeholder="Order ID, name, phone, UTR, tracking…"
         />
 
         <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between">
           <p className="text-sm font-semibold text-neutral-500">
-            {filtered.length} of {tab === "abandoned" ? abandonedCount : paidCount}
+            {rows.length} of {total}
           </p>
           {/* 2-column grid on phones, free-flowing row from sm up */}
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center [&>*]:min-w-0 [&_select]:w-full sm:[&_select]:w-auto">
-            <Select label="Method" value={method} onChange={setMethod} options={METHODS} />
-            <Select label="Date" value={preset} onChange={setPreset} options={DATES} />
+            <Select label="Method" value={method} onChange={reset(setMethod)} options={METHODS} />
+            <Select label="Date" value={preset} onChange={reset(setPreset)} options={DATES} />
             {preset === "custom" && (
               <>
                 <input
@@ -499,7 +441,7 @@ export default function OrdersPage() {
                   aria-label="From"
                   value={from}
                   max={to || undefined}
-                  onChange={(e) => setFrom(e.target.value)}
+                  onChange={(e) => reset(setFrom)(e.target.value)}
                   className={`${selectCls} w-full sm:w-auto`}
                 />
                 <input
@@ -507,36 +449,29 @@ export default function OrdersPage() {
                   aria-label="To"
                   value={to}
                   min={from || undefined}
-                  onChange={(e) => setTo(e.target.value)}
+                  onChange={(e) => reset(setTo)(e.target.value)}
                   className={`${selectCls} w-full sm:w-auto`}
                 />
               </>
             )}
             {tab === "orders" && (
               <>
-                <Select label="Payment" value={pay} onChange={setPay} options={PAY_OPTS} />
-                <Select label="Status" value={status} onChange={setStatus} options={STATUS_OPTS} />
+                <Select label="Payment" value={pay} onChange={reset(setPay)} options={PAY_OPTS} />
+                <Select label="Status" value={status} onChange={reset(setStatus)} options={STATUS_OPTS} />
               </>
             )}
-            <Select label="Per page" value={perPage} onChange={setPerPage} options={PER_PAGE} />
+            <Select label="Per page" value={perPage} onChange={reset(setPerPage)} options={PER_PAGE} />
           </div>
         </div>
       </div>
 
-      <div className="mt-4 space-y-2 sm:mt-6">
+      <div className={`mt-4 space-y-2 transition-opacity sm:mt-6 ${loading && data ? "opacity-50" : ""}`}>
         {!data && !error && <Skeleton />}
-        {!data && error && (
-          <Empty text="Couldn't load orders." action="Retry" onAction={refetch} />
-        )}
+        {!data && error && <Empty text="Couldn't load orders." action="Retry" onAction={refetch} />}
 
         {tab === "orders" && rows.length > 0 && (
           <label className="flex cursor-pointer items-center gap-3 px-3 pb-1 text-xs font-semibold text-neutral-500">
-            <input
-              type="checkbox"
-              className={checkCls}
-              checked={allOnPage}
-              onChange={togglePage}
-            />
+            <input type="checkbox" className={checkCls} checked={allOnPage} onChange={togglePage} />
             Select page
           </label>
         )}
@@ -553,12 +488,9 @@ export default function OrdersPage() {
                     aria-label={`Select ${o.orderId}`}
                     checked={picked.has(o._id)}
                     onClick={(e) => e.stopPropagation()}
-                    onChange={() => toggleOne(o._id)}
+                    onChange={() => toggleOne(o)}
                   />
                 )}
-                <div className="shrink-0">
-                  <Thumb src={o.items?.[0]?.imageUrl} />
-                </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-400 sm:text-[11px]">
                     {o.orderId} · {fmtDate(o.createdAt)}
@@ -569,9 +501,7 @@ export default function OrdersPage() {
                     <Addons order={o} />
                   </div>
                 </div>
-                <p className="shrink-0 text-lg font-extrabold tracking-tight sm:text-xl">
-                  ₹{o.totalAmount}
-                </p>
+                <p className="shrink-0 text-lg font-extrabold tracking-tight sm:text-xl">₹{o.totalAmount}</p>
               </div>
               <div className="w-full sm:w-auto sm:shrink-0">
                 <Actions>
@@ -586,17 +516,10 @@ export default function OrdersPage() {
                       {o.paymentStatus !== "paid" && <PayBadge status={o.paymentStatus} />}
                       {o.shippingMethod === "cod" &&
                         o.paymentStatus !== "paid" &&
-                        ["pending", "processing"].includes(o.fulfillmentStatus) && (
-                          <WaPrepaidButton order={o} />
-                        )}
+                        ["pending", "processing"].includes(o.fulfillmentStatus) && <WaPrepaidButton order={o} />}
                     </>
                   )}
-                  <Btn
-                    icon
-                    variant="danger"
-                    title="Delete order"
-                    onClick={() => setToDelete(o)}
-                  >
+                  <Btn icon variant="danger" title="Delete order" onClick={() => setToDelete(o)}>
                     <Trash2 className="h-4 w-4" />
                   </Btn>
                 </Actions>
@@ -613,50 +536,33 @@ export default function OrdersPage() {
         )}
       </div>
 
-      <Pager page={page} pages={pages} onPage={setPage} />
+      <Pager page={page} pages={pages} onPage={goto} />
 
       {/* Keeps the last rows and pager clear of the floating bulk bar */}
       {bulkOn && <div aria-hidden className="h-32 sm:h-24" />}
 
-      {open && (
+      {full && (
         <OrderModal
-          key={open._id}
-          order={open}
+          key={full._id}
+          order={full}
           onClose={() => setOpenId(null)}
-          onSaved={(p) => {
-            mutate((d) => d.map((o) => (o._id === open._id ? { ...o, ...p } : o)));
-            setFound((d) => d.map((o) => (o._id === open._id ? { ...o, ...p } : o)));
-          }}
-          onDelete={() => setToDelete(open)}
+          onSaved={(p) => patchRows((o) => (o._id === full._id ? { ...o, ...p } : o))}
+          onDelete={() => setToDelete(full)}
         />
       )}
 
-      {toDelete && (
-        <ConfirmDelete
-          order={toDelete}
-          onCancel={() => setToDelete(null)}
-          onConfirm={confirmRemove}
-        />
-      )}
+      {toDelete && <ConfirmDelete order={toDelete} onCancel={() => setToDelete(null)} onConfirm={confirmRemove} />}
 
       {bulkOn && (
         <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-3xl flex-col gap-3 rounded-3xl bg-neutral-950 p-3 text-white shadow-2xl duration-200 animate-in fade-in slide-in-from-bottom-4 sm:bottom-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:rounded-[1.75rem] sm:p-3 sm:pl-5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs font-semibold sm:px-0">
-            <span className="text-sm font-extrabold tracking-tight">
-              {picked.size} selected
-            </span>
-            {picked.size < filtered.length && (
-              <button
-                onClick={() => setPicked(new Set(filtered.map((o) => o._id)))}
-                className="py-1 text-blue-400"
-              >
-                Select all {filtered.length}
+            <span className="text-sm font-extrabold tracking-tight">{picked.size} selected</span>
+            {picked.size < total && (
+              <button onClick={selectAll} className="py-1 text-blue-400">
+                Select all {total}
               </button>
             )}
-            <button
-              onClick={() => setPicked(new Set())}
-              className="py-1 text-white/60 hover:text-white"
-            >
+            <button onClick={() => setPicked(new Map())} className="py-1 text-white/60 hover:text-white">
               Clear
             </button>
           </div>

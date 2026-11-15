@@ -4,18 +4,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Wallet } from "lucide-react";
 import { toast } from "sonner";
-import { client } from "@/lib/sanity";
-import { useQuery } from "@/lib/admin-data";
+import { api, useList } from "@/lib/admin-data";
 import { Btn, PageHead, Skeleton, inputCls } from "@/components/admin/ui";
 
 const UPI = /^[\w.\-]{2,256}@[a-zA-Z]{2,64}$/;
-type Settings = { _id: string; upiId?: string } | null;
+type Settings = { _id: string | null; upiId: string };
 
 export default function SettingsPage() {
-  const { data, mutate } = useQuery<Settings>(
-    "settings",
-    `*[_type == "settings"][0]{ _id, upiId }`,
-  );
+  const { data, mutate } = useList<Settings>("/api/admin/settings", "");
   const [value, setValue] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -23,9 +19,9 @@ export default function SettingsPage() {
   // Fill the input once. Later refetches never overwrite what the user typed.
   const filled = useRef(false);
   useEffect(() => {
-    if (data !== undefined && !filled.current) {
+    if (data && !filled.current) {
       filled.current = true;
-      setValue(data?.upiId ?? "");
+      setValue(data.upiId);
     }
   }, [data]);
 
@@ -36,22 +32,12 @@ export default function SettingsPage() {
     setErr("");
     setBusy(true);
     try {
-      // The settings doc is created on first save, not on first read.
-      const doc = data?._id
-        ? await client.patch(data._id).set({ upiId: v }).commit()
-        : await client.create({
-            _type: "settings",
-            title: "Global Settings",
-            freeSocksOffer: false,
-            shoeCleanerAddon: false,
-            upiId: v,
-          });
-      mutate(() => ({ _id: doc._id, upiId: v }));
+      const doc = await api<Settings>("/api/admin/settings", { method: "PUT", body: { upiId: v } });
+      mutate(() => doc);
       setValue(v);
       toast.success("UPI ID saved");
     } catch (e) {
-      console.error(e);
-      toast.error("Couldn't save UPI ID");
+      toast.error((e as Error).message || "Couldn't save UPI ID");
     } finally {
       setBusy(false);
     }
@@ -62,7 +48,7 @@ export default function SettingsPage() {
       <PageHead title="Settings." count="Site" />
 
       <div className="mt-8">
-        {data === undefined ? (
+        {!data ? (
           <Skeleton rows={1} />
         ) : (
           <form onSubmit={save} className="space-y-3 rounded-3xl bg-neutral-100 p-4">
@@ -72,9 +58,7 @@ export default function SettingsPage() {
               </div>
               <div>
                 <p className="text-sm font-extrabold tracking-tight">UPI ID</p>
-                <p className="text-xs font-medium text-neutral-500">
-                  Checkout payments go to this ID
-                </p>
+                <p className="text-xs font-medium text-neutral-500">Checkout payments go to this ID</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -87,13 +71,7 @@ export default function SettingsPage() {
                 spellCheck={false}
                 className={`${inputCls} !bg-white`}
               />
-              <Btn
-                type="submit"
-                variant="primary"
-                className="h-12"
-                loading={busy}
-                disabled={value.trim() === (data?.upiId ?? "")}
-              >
+              <Btn type="submit" variant="primary" className="h-12" loading={busy} disabled={value.trim() === data.upiId}>
                 Save
               </Btn>
             </div>

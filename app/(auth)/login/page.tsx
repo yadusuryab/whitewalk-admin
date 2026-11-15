@@ -1,81 +1,81 @@
 // app/(auth)/login/page.tsx
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { Inter_Tight } from 'next/font/google'
-import { ArrowUpRight, Loader2 } from 'lucide-react'
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Inter_Tight } from "next/font/google";
+import { ArrowUpRight, Loader2 } from "lucide-react";
 
 const display = Inter_Tight({
-  subsets: ['latin'],
-  weight: ['500', '600', '800'],
-  display: 'swap',
-})
+  subsets: ["latin"],
+  weight: ["500", "600", "800"],
+  display: "swap",
+});
 
 const inputClass =
-  'mt-2 h-12 w-full rounded-2xl bg-neutral-100 px-4 text-sm font-medium outline-none transition-all duration-300 placeholder:text-neutral-400 focus:bg-white focus:ring-2 focus:ring-neutral-950'
+  "mt-2 h-12 w-full rounded-2xl bg-neutral-100 px-4 text-sm font-medium outline-none transition-all duration-300 placeholder:text-neutral-400 focus:bg-white focus:ring-2 focus:ring-neutral-950";
 
-const labelClass = 'text-sm font-semibold text-neutral-500'
+const labelClass = "text-sm font-semibold text-neutral-500";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [checkingAuth, setCheckingAuth] = useState(true)
-  const router = useRouter()
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const router = useRouter();
 
   // Check if user is already authenticated
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch('/api/auth/verify', {
-          method: 'GET',
-          credentials: 'include',
-        })
+        const response = await fetch("/api/auth/verify", {
+          method: "GET",
+          credentials: "include",
+        });
 
-        const data = await response.json()
+        const data = await response.json();
 
         if (data.authenticated) {
-          router.push('/admin')
+          router.push("/admin");
         }
       } catch (err) {
-        console.error('Auth check failed:', err)
+        console.error("Auth check failed:", err);
       } finally {
-        setCheckingAuth(false)
+        setCheckingAuth(false);
       }
-    }
+    };
 
-    checkAuth()
-  }, [router])
+    checkAuth();
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
-      })
+      });
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (response.ok) {
-        router.push('/admin')
-        router.refresh()
+        router.push("/admin");
+        router.refresh();
       } else {
-        setError(data.error || 'Login failed')
+        setError(data.error || "Login failed");
       }
     } catch (err) {
-      setError('Network error. Please try again.')
+      setError("Network error. Please try again.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   if (checkingAuth) {
     return (
@@ -86,7 +86,7 @@ export default function LoginPage() {
           <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-600" />
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -159,7 +159,7 @@ export default function LoginPage() {
               className="group flex h-14 w-full items-center justify-between rounded-full bg-neutral-950 pl-6 pr-1.5 text-white transition-all duration-300 hover:bg-blue-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-neutral-950"
             >
               <span className="text-lg font-extrabold tracking-[-0.03em]">
-                {loading ? 'Signing in…' : 'Sign in'}
+                {loading ? "Signing in…" : "Sign in"}
               </span>
               <span
                 aria-hidden="true"
@@ -180,5 +180,5 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
-  )
+  );
 }
