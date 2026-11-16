@@ -9,7 +9,7 @@ export const writeClient = createClient({
   dataset: process.env.NEXT_PUBLIC_SANITY_DATASET!,
   apiVersion: "2024-01-01",
   useCdn: false,
-  token: process.env.SANITY_WRITE_TOKEN, // never NEXT_PUBLIC_
+  token: process.env.NEXT_PUBLIC_SANITY_API_TOKEN, // never NEXT_PUBLIC_
 });
 
 /** Cache tag for admin lists. Storefront uses "shoes". */

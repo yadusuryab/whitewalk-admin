@@ -6,7 +6,7 @@ const writeClient = createClient({
   projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID,
   dataset: process.env.NEXT_PUBLIC_SANITY_DATASET || "production",
   apiVersion: "2024-01-01",
-  token: process.env.SANITY_API_TOKEN,
+  token: process.env.NEXT_PUBLIC_SANITY_API_TOKEN,
   useCdn: false,
 });
 
@@ -26,10 +26,16 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!customerName || typeof customerName !== "string") {
-      return NextResponse.json({ error: "Customer name is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Customer name is required" },
+        { status: 400 },
+      );
     }
     if (!rating || rating < 1 || rating > 5) {
-      return NextResponse.json({ error: "Rating must be between 1 and 5" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Rating must be between 1 and 5" },
+        { status: 400 },
+      );
     }
 
     const doc: any = {
@@ -61,7 +67,7 @@ export async function POST(req: NextRequest) {
     console.error("Error creating review:", error);
     return NextResponse.json(
       { error: error.message || "Failed to create review" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
