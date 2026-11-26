@@ -4,7 +4,6 @@
 import { useState, type ReactNode } from "react";
 import { Check, Copy, ExternalLink, ImageIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { client } from "@/lib/sanity";
 import {
   Btn,
   Modal,
@@ -33,6 +32,42 @@ import {
 } from "./shared";
 
 const TEXT_KEYS = ["courierName", "trackingNumber", "trackingUrl", "adminNotes"] as const;
+
+const FROM_ADDRESS = `SREEJITH KAPPADATHUKALLAM
+PALLATHERY
+PALAKAD 678007`;
+
+const ONES = [
+  "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+  "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen",
+  "Eighteen", "Nineteen",
+];
+const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+const below100 = (n: number) =>
+  n < 20 ? ONES[n] : TENS[Math.floor(n / 10)] + (n % 10 ? " " + ONES[n % 10] : "");
+
+const below1000 = (n: number) =>
+  n >= 100
+    ? ONES[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + below100(n % 100) : "")
+    : below100(n);
+
+// Indian numbering: crore / lakh / thousand
+const amountInWords = (num: number) => {
+  const n = Math.floor(Math.abs(num || 0));
+  if (n === 0) return "ZERO RUPEES ONLY";
+  const crore = Math.floor(n / 10000000);
+  const lakh = Math.floor(n / 100000) % 100;
+  const thousand = Math.floor(n / 1000) % 100;
+  const rest = n % 1000;
+  const parts = [
+    crore ? below1000(crore) + " Crore" : "",
+    lakh ? below100(lakh) + " Lakh" : "",
+    thousand ? below100(thousand) + " Thousand" : "",
+    rest ? below1000(rest) : "",
+  ].filter(Boolean);
+  return (parts.join(" ") + " Rupees Only").toUpperCase();
+};
 
 const Line = ({ label, value }: { label: string; value: ReactNode }) => (
   <div className="flex items-center justify-between gap-3">
@@ -73,40 +108,37 @@ export default function OrderModal({
     setTimeout(() => setCopied(null), 1500);
   };
 
-// remove: import { client } from "@/lib/sanity";
-
-// replace the body of save()'s try block:
-const save = async () => {
-  setBusy(true);
-  try {
-    // cleared fields are unset on the server
-    const set: Record<string, unknown> = {
-      fulfillmentStatus: f.fulfillmentStatus,
-      paymentStatus: f.paymentStatus,
-    };
-    const unset: string[] = [];
-    for (const k of TEXT_KEYS) {
-      const v = f[k].trim();
-      if (v) set[k] = v;
-      else unset.push(k);
+  const save = async () => {
+    setBusy(true);
+    try {
+      // cleared fields are unset on the server
+      const set: Record<string, unknown> = {
+        fulfillmentStatus: f.fulfillmentStatus,
+        paymentStatus: f.paymentStatus,
+      };
+      const unset: string[] = [];
+      for (const k of TEXT_KEYS) {
+        const v = f[k].trim();
+        if (v) set[k] = v;
+        else unset.push(k);
+      }
+      const r = await fetch(`/api/orders/${order._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ set, unset }),
+      });
+      if (!r.ok) throw new Error("Request failed");
+      onSaved({
+        ...set,
+        ...Object.fromEntries(unset.map((k) => [k, undefined])),
+      } as Partial<Order>);
+      onClose();
+    } catch (e) {
+      console.error(e);
+      toast.error("Couldn't save order");
+      setBusy(false);
     }
-    const r = await fetch(`/api/orders/${order._id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ set, unset }),
-    });
-    if (!r.ok) throw new Error("Request failed");
-    onSaved({
-      ...set,
-      ...Object.fromEntries(unset.map((k) => [k, undefined])),
-    } as Partial<Order>);
-    onClose();
-  } catch (e) {
-    console.error(e);
-    toast.error("Couldn't save order");
-    setBusy(false);
-  }
-};
+  };
 
   const copyAddress = async () => {
     const sizes = [
@@ -115,9 +147,15 @@ const save = async () => {
         ? [`SIZE PAIR 3= ${order.randomThirdSize} (RANDOM)`]
         : []),
     ].join("\n");
+    const isCod = order.shippingMethod === "cod";
     const collect = order.remainingAmount ?? Math.max(0, order.totalAmount - COD_ADVANCE);
     const advance = order.advancePaid ?? COD_ADVANCE;
-    const text = `NAME : ${order.customerName}
+    const words = amountInWords(isCod ? collect : order.totalAmount);
+    const text = `FROM :
+${FROM_ADDRESS}
+
+TO :
+NAME : ${order.customerName}
 ADDRESS : ${order.address}${order.landmark ? ", " + order.landmark : ""}
 CITY : ${order.district}
 DISTRICT : ${order.district}
@@ -127,7 +165,9 @@ CONTACT NO 1 : ${order.contact1}
 SECOND NO 2 : ${order.contact2 || ""}
 ${sizes}
 SHOE CLEANER : ${order.shoeCleanerAddon ? "YES" : "NO"}
-\nPAYMENT : ${order.shippingMethod === "cod" ? `COD - collect ₹${collect} (₹${advance} advance paid)` : "PREPAID"}
+
+PAYMENT : ${isCod ? `COD - collect ₹${collect} (₹${advance} advance paid)` : "PREPAID"}
+AMOUNT IN WORDS : ${words}
 `;
     try {
       await navigator.clipboard.writeText(text);
