@@ -31,25 +31,63 @@ import {
   type Order,
 } from "./shared";
 
-const TEXT_KEYS = ["courierName", "trackingNumber", "trackingUrl", "adminNotes"] as const;
+const TEXT_KEYS = [
+  "courierName",
+  "trackingNumber",
+  "trackingUrl",
+  "adminNotes",
+] as const;
 
-const FROM_ADDRESS = `SREEJITH KAPPADATHUKALLAM
-PALLATHERY
-PALAKAD 678007`;
+const FROM_ADDRESS = `SREEJITH
+PALLATHERY (PO) 
+678007 PALAKKAD
+ID: 1406279569`;
 
 const ONES = [
-  "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
-  "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen",
-  "Eighteen", "Nineteen",
+  "",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+  "Nine",
+  "Ten",
+  "Eleven",
+  "Twelve",
+  "Thirteen",
+  "Fourteen",
+  "Fifteen",
+  "Sixteen",
+  "Seventeen",
+  "Eighteen",
+  "Nineteen",
 ];
-const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+const TENS = [
+  "",
+  "",
+  "Twenty",
+  "Thirty",
+  "Forty",
+  "Fifty",
+  "Sixty",
+  "Seventy",
+  "Eighty",
+  "Ninety",
+];
 
 const below100 = (n: number) =>
-  n < 20 ? ONES[n] : TENS[Math.floor(n / 10)] + (n % 10 ? " " + ONES[n % 10] : "");
+  n < 20
+    ? ONES[n]
+    : TENS[Math.floor(n / 10)] + (n % 10 ? " " + ONES[n % 10] : "");
 
 const below1000 = (n: number) =>
   n >= 100
-    ? ONES[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + below100(n % 100) : "")
+    ? ONES[Math.floor(n / 100)] +
+      " Hundred" +
+      (n % 100 ? " " + below100(n % 100) : "")
     : below100(n);
 
 // Indian numbering: crore / lakh / thousand
@@ -148,7 +186,8 @@ export default function OrderModal({
         : []),
     ].join("\n");
     const isCod = order.shippingMethod === "cod";
-    const collect = order.remainingAmount ?? Math.max(0, order.totalAmount - COD_ADVANCE);
+    const collect =
+      order.remainingAmount ?? Math.max(0, order.totalAmount - COD_ADVANCE);
     const advance = order.advancePaid ?? COD_ADVANCE;
     const words = amountInWords(isCod ? collect : order.totalAmount);
     const text = `FROM :
@@ -180,8 +219,12 @@ AMOUNT IN WORDS : ${words}
   const copyImage = async (url: string, i: number) => {
     try {
       // ClipboardItem needs PNG.
-      const blob = await (await fetch(url.replace(/auto=format/g, "fm=png"))).blob();
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      const blob = await (
+        await fetch(url.replace(/auto=format/g, "fm=png"))
+      ).blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": blob }),
+      ]);
       flash(i);
     } catch {
       toast.error("Couldn't copy image");
@@ -240,7 +283,9 @@ AMOUNT IN WORDS : ${words}
                   {it.productName}
                   <span className="block text-xs font-semibold text-neutral-500">
                     Size {it.size}
-                    {it.isFreeItem && <span className="ml-2 text-green-700">Free</span>}
+                    {it.isFreeItem && (
+                      <span className="ml-2 text-green-700">Free</span>
+                    )}
                   </span>
                 </span>
                 <span className="whitespace-nowrap font-extrabold tracking-tight">
@@ -262,13 +307,17 @@ AMOUNT IN WORDS : ${words}
                     <span className="ml-2 text-green-700">Free</span>
                   </span>
                 </span>
-                <span className="whitespace-nowrap font-extrabold tracking-tight">₹0</span>
+                <span className="whitespace-nowrap font-extrabold tracking-tight">
+                  ₹0
+                </span>
               </div>
             </div>
           )}
 
           <div className="flex items-baseline justify-between border-t border-neutral-200 pt-3">
-            <span className="text-sm font-semibold text-neutral-500">Total</span>
+            <span className="text-sm font-semibold text-neutral-500">
+              Total
+            </span>
             <span className="text-4xl font-extrabold leading-none tracking-[-0.045em]">
               ₹{order.totalAmount}
             </span>
@@ -291,13 +340,17 @@ AMOUNT IN WORDS : ${words}
               </>
             )}
           </Btn>
-          <p className="pr-24 text-lg font-extrabold tracking-tight">{order.customerName}</p>
+          <p className="pr-24 text-lg font-extrabold tracking-tight">
+            {order.customerName}
+          </p>
           <p className="font-medium text-neutral-500">
             {[order.contact1, order.contact2].filter(Boolean).join(", ")}
           </p>
           <p className="font-medium text-neutral-500">
-            {[order.address, order.landmark, order.district].filter(Boolean).join(", ")},{" "}
-            {order.state} - {order.pincode}
+            {[order.address, order.landmark, order.district]
+              .filter(Boolean)
+              .join(", ")}
+            , {order.state} - {order.pincode}
           </p>
           {order.instagramId && (
             <p className="font-medium text-neutral-500">@{order.instagramId}</p>
@@ -323,17 +376,34 @@ AMOUNT IN WORDS : ${words}
             <Line label="Paid now" value={`₹${order.advancePaid}`} />
           )}
           {order.remainingAmount ? (
-            <Line label="Collect on delivery" value={`₹${order.remainingAmount}`} />
+            <Line
+              label="Collect on delivery"
+              value={`₹${order.remainingAmount}`}
+            />
           ) : null}
-          {order.utr && <Line label="UTR" value={<span className="font-mono">{order.utr}</span>} />}
+          {order.utr && (
+            <Line
+              label="UTR"
+              value={<span className="font-mono">{order.utr}</span>}
+            />
+          )}
           {order.razorpayPaymentId && (
             <Line
               label="Razorpay"
-              value={<span className="font-mono text-xs">{order.razorpayPaymentId}</span>}
+              value={
+                <span className="font-mono text-xs">
+                  {order.razorpayPaymentId}
+                </span>
+              }
             />
           )}
           {order.paymentScreenshotUrl && (
-            <a href={order.paymentScreenshotUrl} target="_blank" rel="noreferrer" className="block">
+            <a
+              href={order.paymentScreenshotUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block"
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={`${order.paymentScreenshotUrl}?w=600&auto=format`}
@@ -362,7 +432,11 @@ AMOUNT IN WORDS : ${words}
                   variant="primary"
                   className="flex-1"
                   onClick={() =>
-                    setF({ ...f, paymentStatus: "paid", fulfillmentStatus: "processing" })
+                    setF({
+                      ...f,
+                      paymentStatus: "paid",
+                      fulfillmentStatus: "processing",
+                    })
                   }
                 >
                   Approve
@@ -371,7 +445,11 @@ AMOUNT IN WORDS : ${words}
                   variant="danger"
                   className="flex-1"
                   onClick={() =>
-                    setF({ ...f, paymentStatus: "rejected", fulfillmentStatus: "cancelled" })
+                    setF({
+                      ...f,
+                      paymentStatus: "rejected",
+                      fulfillmentStatus: "cancelled",
+                    })
                   }
                 >
                   Reject
@@ -399,17 +477,30 @@ AMOUNT IN WORDS : ${words}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelCls}>Courier</label>
-            <input placeholder="e.g. Delhivery" className={inputCls} {...bind("courierName")} />
+            <input
+              placeholder="e.g. Delhivery"
+              className={inputCls}
+              {...bind("courierName")}
+            />
           </div>
           <div>
             <label className={labelCls}>Tracking number</label>
-            <input placeholder="AWB / tracking ID" className={inputCls} {...bind("trackingNumber")} />
+            <input
+              placeholder="AWB / tracking ID"
+              className={inputCls}
+              {...bind("trackingNumber")}
+            />
           </div>
         </div>
 
         <div>
           <label className={labelCls}>Tracking URL</label>
-          <input type="url" placeholder="https://..." className={inputCls} {...bind("trackingUrl")} />
+          <input
+            type="url"
+            placeholder="https://..."
+            className={inputCls}
+            {...bind("trackingUrl")}
+          />
           {f.trackingUrl && (
             <a
               href={f.trackingUrl}
@@ -433,7 +524,13 @@ AMOUNT IN WORDS : ${words}
         </div>
       </ModalBody>
       <ModalFoot>
-        <Btn variant="danger" icon title="Delete order" onClick={onDelete} className="mr-auto">
+        <Btn
+          variant="danger"
+          icon
+          title="Delete order"
+          onClick={onDelete}
+          className="mr-auto"
+        >
           <Trash2 className="h-4 w-4" />
         </Btn>
         <Btn onClick={onClose}>Cancel</Btn>
